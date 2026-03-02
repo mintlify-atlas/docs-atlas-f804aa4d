@@ -136,8 +136,18 @@ highway-frontend/
 - Shared layout components
 
 **src/utils/** - Utility functions and helpers
-- Supabase client configuration
-- Helper functions
+- Supabase client configuration (`client.ts`, `server.ts`, `middleware.ts`)
+- API helper functions (`api.ts`)
+
+<Warning>
+The `src/utils/api.ts` file contains a hardcoded `API_BASE_URL`. Update this constant to point to your backend server URL:
+
+```typescript src/utils/api.ts
+const API_BASE_URL = "https://your-backend-url.com";
+```
+
+For development, use `http://localhost:3000` (or your backend port).
+</Warning>
 
 ## Starting the Dev Server
 

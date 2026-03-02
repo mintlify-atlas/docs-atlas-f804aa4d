@@ -80,23 +80,12 @@ Create a `.env.local` file in the `highway-frontend` directory:
   This key is safe to use in the browser.
 </ParamField>
 
-<ParamField path="NEXT_PUBLIC_BACKEND_URL" type="string" optional>
-  URL of your Highway backend server.
-  
-  **Development**: `http://localhost:3000`
-  
-  **Production**: Your deployed backend URL
-</ParamField>
-
 ### Frontend .env.local Example
 
 ```bash .env.local
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-
-# Backend API URL
-NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
 ```
 
 <Note>
