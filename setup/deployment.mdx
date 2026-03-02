@@ -1,0 +1,569 @@
+---
+title: 'Deployment'
+description: 'Deploy Highway to production'
+---
+
+This guide covers deploying both the Highway backend and frontend to production environments.
+
+## Prerequisites
+
+Before deploying, ensure you have:
+
+<Steps>
+  <Step title="Production environment variables">
+    - OpenAI API key with production access
+    - Twilio account with verified phone number
+    - Supabase project configured
+    - Domain name (optional but recommended)
+  </Step>
+
+  <Step title="SSL certificates">
+    - WebSocket connections require HTTPS/WSS
+    - Use a service like Let's Encrypt for free SSL
+    - Or use a platform that provides SSL automatically
+  </Step>
+
+  <Step title="Tested build">
+    - Test backend locally: `node index.js`
+    - Test frontend build: `npm run build && npm run start`
+    - Verify all features work correctly
+  </Step>
+</Steps>
+
+## Backend Deployment
+
+The Highway backend can be deployed to various platforms:
+
+### Option 1: Railway
+
+Railway provides easy deployment with automatic SSL and environment variable management.
+
+<Steps>
+  <Step title="Install Railway CLI">
+    ```bash
+    npm i -g @railway/cli
+    ```
+  </Step>
+
+  <Step title="Login and initialize">
+    ```bash
+    railway login
+    cd highway-backend
+    railway init
+    ```
+  </Step>
+
+  <Step title="Add environment variables">
+    ```bash
+    railway variables set OPENAI_API_KEY=sk-proj-...
+    railway variables set PORT=8080
+    railway variables set TWILIO_ACCOUNT_SID=AC...
+    railway variables set TWILIO_AUTH_TOKEN=...
+    railway variables set TWILIO_PHONE_NUMBER=+1...
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    railway up
+    ```
+    
+    Railway will provide a URL like `https://your-app.railway.app`
+  </Step>
+</Steps>
+
+### Option 2: Render
+
+Render offers free tier for backend services.
+
+<Steps>
+  <Step title="Create new Web Service">
+    1. Go to [Render Dashboard](https://dashboard.render.com/)
+    2. Click "New +" → "Web Service"
+    3. Connect your GitHub repository
+    4. Select `highway-backend` directory
+  </Step>
+
+  <Step title="Configure service">
+    **Build Command**: `npm install`
+    
+    **Start Command**: `node index.js`
+    
+    **Environment**: Node
+  </Step>
+
+  <Step title="Add environment variables">
+    In the Render dashboard, add all backend environment variables:
+    - `OPENAI_API_KEY`
+    - `PORT` (Render provides this automatically)
+    - `TWILIO_ACCOUNT_SID`
+    - `TWILIO_AUTH_TOKEN`
+    - `TWILIO_PHONE_NUMBER`
+  </Step>
+
+  <Step title="Deploy">
+    Click "Create Web Service" and Render will deploy automatically.
+  </Step>
+</Steps>
+
+### Option 3: DigitalOcean App Platform
+
+<Steps>
+  <Step title="Create new app">
+    1. Go to [DigitalOcean Apps](https://cloud.digitalocean.com/apps)
+    2. Click "Create App"
+    3. Connect your GitHub repository
+    4. Select the `highway-backend` directory
+  </Step>
+
+  <Step title="Configure build settings">
+    **Run Command**: `node index.js`
+    
+    **HTTP Port**: 8080 (or your configured PORT)
+  </Step>
+
+  <Step title="Add environment variables">
+    Add all required backend environment variables in the app settings.
+  </Step>
+
+  <Step title="Deploy">
+    Review and create the app. DigitalOcean will build and deploy.
+  </Step>
+</Steps>
+
+### Backend Deployment Considerations
+
+<Warning>
+**WebSocket Support Required**
+
+Ensure your deployment platform supports:
+- WebSocket connections (required for Twilio media streams)
+- Long-running connections
+- WSS (WebSocket Secure) protocol
+</Warning>
+
+**Platform Requirements**:
+- Node.js 18+ runtime
+- WebSocket support (not all platforms support this)
+- Ability to listen on custom ports
+- HTTPS/WSS for production
+
+**Recommended Platforms**:
+- ✅ Railway (excellent WebSocket support)
+- ✅ Render (supports WebSockets)
+- ✅ DigitalOcean App Platform
+- ✅ AWS EC2 / Elastic Beanstalk
+- ✅ Google Cloud Run
+- ⚠️ Vercel (limited WebSocket support)
+- ⚠️ Netlify (no WebSocket support for functions)
+
+## Frontend Deployment
+
+The Highway frontend (Next.js) can be deployed to platforms optimized for React apps:
+
+### Option 1: Vercel (Recommended)
+
+Vercel is created by the Next.js team and offers the best integration.
+
+<Steps>
+  <Step title="Install Vercel CLI">
+    ```bash
+    npm i -g vercel
+    ```
+  </Step>
+
+  <Step title="Login and deploy">
+    ```bash
+    cd highway-frontend
+    vercel
+    ```
+    
+    Follow the prompts to configure your project.
+  </Step>
+
+  <Step title="Add environment variables">
+    In the Vercel dashboard:
+    1. Go to Project Settings → Environment Variables
+    2. Add `NEXT_PUBLIC_SUPABASE_URL`
+    3. Add `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+    4. Add `NEXT_PUBLIC_BACKEND_URL` (your deployed backend URL)
+  </Step>
+
+  <Step title="Deploy to production">
+    ```bash
+    vercel --prod
+    ```
+    
+    Vercel will provide a production URL like `https://your-app.vercel.app`
+  </Step>
+</Steps>
+
+### Option 2: Netlify
+
+<Steps>
+  <Step title="Install Netlify CLI">
+    ```bash
+    npm i -g netlify-cli
+    ```
+  </Step>
+
+  <Step title="Build the project">
+    ```bash
+    cd highway-frontend
+    npm run build
+    ```
+  </Step>
+
+  <Step title="Deploy">
+    ```bash
+    netlify deploy --prod
+    ```
+    
+    Select `.next` as the publish directory.
+  </Step>
+
+  <Step title="Configure environment variables">
+    In Netlify dashboard:
+    - Site Settings → Environment Variables
+    - Add all `NEXT_PUBLIC_*` variables
+  </Step>
+</Steps>
+
+### Option 3: Self-Hosted
+
+Deploy to your own server:
+
+<Steps>
+  <Step title="Build the application">
+    ```bash
+    cd highway-frontend
+    npm run build
+    ```
+  </Step>
+
+  <Step title="Start the production server">
+    ```bash
+    npm run start
+    ```
+    
+    Or use PM2 for process management:
+    ```bash
+    npm i -g pm2
+    pm2 start npm --name "highway-frontend" -- start
+    pm2 save
+    pm2 startup
+    ```
+  </Step>
+
+  <Step title="Configure reverse proxy">
+    Use Nginx or Apache to proxy requests:
+    
+    ```nginx nginx.conf
+    server {
+      listen 80;
+      server_name your-domain.com;
+      
+      location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Add SSL certificate">
+    ```bash
+    sudo certbot --nginx -d your-domain.com
+    ```
+  </Step>
+</Steps>
+
+## Environment Variable Management
+
+### Production Environment Variables
+
+**Backend (.env)**:
+```bash
+OPENAI_API_KEY=sk-proj-production-key
+PORT=8080
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1...
+```
+
+**Frontend (.env.production)**:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+NEXT_PUBLIC_BACKEND_URL=https://api.your-domain.com
+```
+
+### Secrets Management Best Practices
+
+<Steps>
+  <Step title="Use platform secret management">
+    - Most platforms encrypt environment variables
+    - Use platform UI to set sensitive values
+    - Never commit production secrets to Git
+  </Step>
+
+  <Step title="Separate environments">
+    - Development: `.env.development`
+    - Staging: `.env.staging`
+    - Production: `.env.production`
+  </Step>
+
+  <Step title="Rotate credentials regularly">
+    - Change API keys quarterly
+    - Use different keys for dev/staging/prod
+    - Keep audit logs of key changes
+  </Step>
+</Steps>
+
+## Database Setup (Supabase)
+
+Your Supabase database should already be configured from the [Environment Variables](/setup/environment-variables) guide.
+
+### Production Database Configuration
+
+<Steps>
+  <Step title="Enable connection pooling">
+    In Supabase Dashboard → Database Settings:
+    - Enable connection pooling
+    - Set max connections based on your plan
+  </Step>
+
+  <Step title="Configure Row Level Security">
+    Review and update RLS policies for production:
+    
+    ```sql
+    -- Restrict access to authenticated users only
+    CREATE POLICY "Authenticated users can read calls" ON calls
+      FOR SELECT USING (auth.role() = 'authenticated');
+    
+    CREATE POLICY "Authenticated users can insert calls" ON calls
+      FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+    ```
+  </Step>
+
+  <Step title="Set up backups">
+    - Enable automatic daily backups in Supabase
+    - Configure Point-in-Time Recovery (PITR) if available
+    - Test restore process periodically
+  </Step>
+
+  <Step title="Monitor database performance">
+    - Review query performance in Supabase dashboard
+    - Add indexes for frequently queried columns
+    - Monitor database size and plan accordingly
+  </Step>
+</Steps>
+
+## Domain and SSL Setup
+
+### Custom Domain Configuration
+
+<Steps>
+  <Step title="Backend domain">
+    1. Add A record pointing to your backend server IP
+    2. Or add CNAME to your platform's domain
+    3. Example: `api.your-domain.com`
+  </Step>
+
+  <Step title="Frontend domain">
+    1. Add A record or CNAME for frontend
+    2. Example: `app.your-domain.com` or `www.your-domain.com`
+  </Step>
+
+  <Step title="Update environment variables">
+    Update `NEXT_PUBLIC_BACKEND_URL` to use your custom domain:
+    ```bash
+    NEXT_PUBLIC_BACKEND_URL=https://api.your-domain.com
+    ```
+  </Step>
+</Steps>
+
+### SSL Certificate Setup
+
+**Most platforms (Vercel, Railway, Render) provide automatic SSL.**
+
+For self-hosted deployments:
+
+```bash
+# Install Certbot
+sudo apt-get install certbot python3-certbot-nginx
+
+# Get certificates
+sudo certbot --nginx -d api.your-domain.com -d app.your-domain.com
+
+# Auto-renew
+sudo certbot renew --dry-run
+```
+
+<Warning>
+**SSL is required for production**
+
+Twilio media streams require WSS (WebSocket Secure), which requires HTTPS/SSL certificates.
+</Warning>
+
+## CORS Configuration for Production
+
+Update backend CORS settings to only allow your frontend domain:
+
+```javascript index.js
+app.use(
+  cors({
+    origin: "https://app.your-domain.com", // Your frontend domain
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+```
+
+For multiple domains:
+
+```javascript
+const allowedOrigins = [
+  "https://app.your-domain.com",
+  "https://www.your-domain.com",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
+```
+
+## Health Checks and Monitoring
+
+### Backend Health Check
+
+The backend provides a health check endpoint:
+
+```bash
+curl https://api.your-domain.com/
+```
+
+Expected response:
+```json
+{"message":"Running"}
+```
+
+### Monitoring Setup
+
+<Steps>
+  <Step title="Set up uptime monitoring">
+    Use services like:
+    - [UptimeRobot](https://uptimerobot.com/) (free)
+    - [Pingdom](https://www.pingdom.com/)
+    - [Better Uptime](https://betteruptime.com/)
+    
+    Monitor both backend and frontend URLs.
+  </Step>
+
+  <Step title="Configure logging">
+    - Backend: Winston logs to console (captured by platform)
+    - Frontend: Next.js logs
+    - Consider external logging: Datadog, LogRocket, Sentry
+  </Step>
+
+  <Step title="Set up error tracking">
+    Install Sentry for error monitoring:
+    
+    ```bash
+    npm install @sentry/node @sentry/nextjs
+    ```
+    
+    Configure in both backend and frontend.
+  </Step>
+</Steps>
+
+## Deployment Checklist
+
+Before going live:
+
+- [ ] Backend deployed with all environment variables
+- [ ] Frontend deployed with Supabase configuration
+- [ ] Database migrations applied
+- [ ] RLS policies configured
+- [ ] Custom domains configured
+- [ ] SSL certificates active
+- [ ] CORS configured for production domain
+- [ ] Health checks responding
+- [ ] Twilio webhook URLs updated
+- [ ] OpenAI API limits reviewed
+- [ ] Monitoring and alerts configured
+- [ ] Backup strategy in place
+- [ ] Documentation updated with production URLs
+
+## Post-Deployment
+
+<Steps>
+  <Step title="Test full call flow">
+    1. Trigger a call from the frontend
+    2. Verify Twilio connects successfully
+    3. Test OpenAI conversation
+    4. Confirm call logs appear in database
+  </Step>
+
+  <Step title="Monitor initial traffic">
+    - Watch server logs for errors
+    - Monitor API rate limits
+    - Check database connection pool
+    - Review error rates
+  </Step>
+
+  <Step title="Optimize performance">
+    - Enable CDN for frontend assets
+    - Configure database indexes
+    - Implement caching where appropriate
+    - Review and optimize API calls
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+**Build failures?**
+- Check Node.js version matches locally
+- Verify all dependencies in package.json
+- Review build logs for specific errors
+
+**WebSocket connection issues?**
+- Ensure platform supports WebSockets
+- Verify SSL certificates are valid
+- Check CORS configuration
+- Test with WSS protocol (not WS)
+
+**Environment variables not working?**
+- Redeploy after adding new variables
+- Check variable names match exactly
+- Verify frontend variables have `NEXT_PUBLIC_` prefix
+
+**Database connection errors?**
+- Verify Supabase URL and key
+- Check RLS policies aren't blocking access
+- Review connection pool settings
+- Test database connection in Supabase dashboard
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore Highway API endpoints
+  </Card>
+  <Card title="Voice Configuration" icon="microphone" href="/api/configuration/conversation-config">
+    Customize voice assistant behavior
+  </Card>
+</CardGroup>

@@ -1,0 +1,204 @@
+---
+title: 'Backend Setup'
+description: 'Set up and configure the Highway backend server'
+---
+
+The Highway backend is an Express.js server that handles WebSocket connections, Twilio integration, and OpenAI Realtime API communication.
+
+## Installing Dependencies
+
+<Steps>
+  <Step title="Navigate to backend directory">
+    ```bash
+    cd highway-backend
+    ```
+  </Step>
+
+  <Step title="Install npm packages">
+    ```bash
+    npm install
+    ```
+
+    This will install the following core dependencies:
+    - `express` - Web framework
+    - `express-ws` - WebSocket support
+    - `cors` - Cross-origin resource sharing
+    - `dotenv` - Environment variable management
+    - `twilio` - Twilio SDK for phone calls
+    - `openai` - OpenAI SDK for Realtime API
+    - `winston` - Logging framework
+    - `@supabase/supabase-js` - Supabase client
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env` file in the backend directory. See [Environment Variables](/setup/environment-variables) for required variables.
+  </Step>
+</Steps>
+
+## Directory Structure
+
+The backend follows a modular structure:
+
+```
+highway-backend/
+├── index.js              # Main server entry point
+├── config.js             # Configuration and environment variables
+├── routes.js             # HTTP route handlers
+├── websocket.js          # WebSocket connection handling
+├── conversationConfig.js # OpenAI Realtime API configuration
+├── logging/
+│   └── logger.js         # Winston logger setup
+├── middleware/           # Express middleware
+└── package.json
+```
+
+### Key Files
+
+**index.js** - Server initialization
+- Sets up Express app
+- Configures CORS
+- Registers routes and WebSocket handlers
+- Starts server on configured port
+
+**config.js** - Configuration management
+- Loads environment variables
+- Exports configuration constants
+- Defines system messages and voice settings
+
+**routes.js** - HTTP endpoints
+- `/` - Health check endpoint
+- `/call-customer` - Initiates Twilio calls
+- Handles Supabase database operations
+
+**websocket.js** - WebSocket handling
+- Manages media stream connections
+- Bridges Twilio and OpenAI Realtime API
+- Handles audio streaming
+
+## Starting the Server
+
+<CodeGroup>
+```bash Development
+cd highway-backend
+node index.js
+```
+
+```bash With nodemon
+cd highway-backend
+npx nodemon index.js
+```
+
+```bash Production
+cd highway-backend
+NODE_ENV=production node index.js
+```
+</CodeGroup>
+
+You should see:
+```
+2026-03-02 12:00:00 info: Listening on port 3000
+```
+
+## Port Configuration
+
+The server port is configured via the `PORT` environment variable:
+
+```bash .env
+PORT=3000
+```
+
+**Default**: If not specified, you must set a PORT value.
+
+<Note>
+When deploying, ensure your hosting platform's port configuration matches your environment variable.
+</Note>
+
+## CORS Setup
+
+The backend is configured with CORS to allow frontend connections:
+
+```javascript index.js
+app.use(
+  cors({
+    origin: "*", // Replace with your frontend's domain
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+```
+
+<Warning>
+In production, replace `origin: "*"` with your specific frontend domain for security:
+```javascript
+origin: "https://your-frontend-domain.com"
+```
+</Warning>
+
+## Logging Configuration
+
+Highway uses Winston for structured logging. The logger is configured in `logging/logger.js`:
+
+**Features**:
+- Console output with colorization
+- Timestamp formatting (YYYY-MM-DD HH:mm:ss)
+- Exception handling
+- Info level logging by default
+
+**Usage in code**:
+```javascript
+const logger = require("./logging/logger");
+
+logger.info("Server started");
+logger.error("Connection failed", error);
+```
+
+**Log levels**:
+- `info` - General information (default)
+- `warn` - Warning messages
+- `error` - Error messages
+- `debug` - Debug information
+
+**Logged event types** (configured in config.js):
+- `response.content.done`
+- `rate_limits.updated`
+- `response.done`
+- `input_audio_buffer.committed`
+- `input_audio_buffer.speech_stopped`
+- `input_audio_buffer.speech_started`
+- `session.created`
+
+## Verification
+
+Test your backend setup:
+
+<Steps>
+  <Step title="Check server is running">
+    ```bash
+    curl http://localhost:3000
+    ```
+
+    Expected response:
+    ```json
+    {"message":"Running"}
+    ```
+  </Step>
+
+  <Step title="Verify environment variables">
+    Check that all required variables are loaded by reviewing the startup logs.
+  </Step>
+
+  <Step title="Test WebSocket connection">
+    Use a WebSocket client to connect to `ws://localhost:3000/media-stream/{verification}/{callId}`
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/setup/environment-variables">
+    Configure all required environment variables
+  </Card>
+  <Card title="Frontend Setup" icon="browser" href="/setup/frontend-setup">
+    Set up the Next.js frontend
+  </Card>
+</CardGroup>

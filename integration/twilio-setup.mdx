@@ -1,0 +1,220 @@
+---
+title: 'Twilio Setup'
+description: 'Configure Twilio for phone call integration with Highway'
+---
+
+This guide will walk you through setting up Twilio to handle phone calls with WebSocket streaming for Highway's real-time voice verification system.
+
+## Prerequisites
+
+- A Twilio account
+- Access to purchase a phone number
+- A publicly accessible domain for webhooks
+
+## Creating a Twilio Account
+
+<Steps>
+  <Step title="Sign up for Twilio">
+    Go to [twilio.com](https://www.twilio.com) and create a new account. You'll need to verify your email and phone number.
+  </Step>
+  
+  <Step title="Verify your account">
+    Complete the account verification process. For production use, you'll need to upgrade from a trial account.
+  </Step>
+</Steps>
+
+## Getting Your Credentials
+
+<Steps>
+  <Step title="Navigate to Account Dashboard">
+    Once logged in, go to your [Twilio Console](https://console.twilio.com).
+  </Step>
+  
+  <Step title="Locate Account SID and Auth Token">
+    On the console home page, you'll find:
+    - **Account SID**: A unique identifier for your account
+    - **Auth Token**: Your authentication token (keep this secret)
+    
+    Copy both values - you'll need them for your environment variables.
+  </Step>
+</Steps>
+
+<Note>
+Store your Auth Token securely. Never commit it to version control or share it publicly.
+</Note>
+
+## Purchasing a Phone Number
+
+<Steps>
+  <Step title="Go to Phone Numbers section">
+    In the Twilio Console, navigate to **Phone Numbers** > **Manage** > **Buy a number**.
+  </Step>
+  
+  <Step title="Select capabilities">
+    Choose a number with the following capabilities:
+    - **Voice**: Required for making and receiving calls
+    - **SMS**: Optional, but useful for notifications
+  </Step>
+  
+  <Step title="Choose your number">
+    Search for numbers by country, area code, or specific digits. Once you find a suitable number, click **Buy**.
+  </Step>
+  
+  <Step title="Save the number">
+    Copy your new phone number (in E.164 format, e.g., +15551234567) for your environment variables.
+  </Step>
+</Steps>
+
+## Configuring Environment Variables
+
+Add the following to your `.env` file:
+
+```bash
+TWILIO_ACCOUNT_SID=your_account_sid_here
+TWILIO_AUTH_TOKEN=your_auth_token_here
+TWILIO_PHONE_NUMBER=+15551234567
+```
+
+## TwiML Configuration for WebSocket Streaming
+
+Highway uses TwiML (Twilio Markup Language) to connect calls to a WebSocket stream. The configuration is handled programmatically in your backend:
+
+```javascript routes.js
+const call = await client.calls.create({
+  to: to,
+  from: TWILIO_PHONE_NUMBER,
+  twiml: `<?xml version="1.0" encoding="UTF-8"?>
+          <Response>
+              <Connect>
+                  <Stream url="wss://${req.headers.host}/media-stream/${verification}/${data[0].id}" />
+                  <Record transcribe="true" transcribeCallback="https://your-webhook-url.com/transcription"/>
+              </Connect>
+              <Hangup/>
+          </Response>`,
+});
+```
+
+### Key TwiML Elements
+
+- **`<Connect>`**: Establishes the WebSocket connection
+- **`<Stream>`**: Specifies the WebSocket URL for bi-directional audio streaming
+- **`<Record>`**: Enables call recording with transcription
+- **`<Hangup>`**: Ends the call when the stream closes
+
+<Info>
+The WebSocket URL must be accessible over HTTPS/WSS in production. Use a service like ngrok for local development.
+</Info>
+
+## Testing the Integration
+
+<Steps>
+  <Step title="Start your backend server">
+    Ensure your Highway backend is running and accessible:
+    
+    ```bash
+    npm start
+    ```
+  </Step>
+  
+  <Step title="Make a test call">
+    Use the `/call-customer` endpoint to initiate a call:
+    
+    ```bash
+    curl -X POST http://localhost:3000/call-customer \
+      -H "Content-Type: application/json" \
+      -d '{
+        "to": "+15559876543",
+        "verification": 123
+      }'
+    ```
+  </Step>
+  
+  <Step title="Verify the call">
+    - Check that the call is received on the destination number
+    - Verify that audio streams correctly through the WebSocket
+    - Monitor the Twilio console for call logs
+  </Step>
+</Steps>
+
+## Webhook Setup
+
+### Transcription Callback
+
+The transcription callback receives the transcribed text after the call ends:
+
+```javascript
+transcribeCallback="https://your-webhook-url.com/transcription"
+```
+
+<Steps>
+  <Step title="Create a webhook endpoint">
+    Set up an endpoint to receive transcription data from Twilio.
+  </Step>
+  
+  <Step title="Update the TwiML">
+    Replace `https://your-webhook-url.com/transcription` with your actual webhook URL.
+  </Step>
+  
+  <Step title="Verify webhook security">
+    Validate that requests are coming from Twilio by checking the `X-Twilio-Signature` header.
+  </Step>
+</Steps>
+
+<Warning>
+Always validate webhook signatures to prevent unauthorized access to your endpoints.
+</Warning>
+
+## Call Recording and Transcription
+
+Highway automatically enables recording and transcription:
+
+```xml
+<Record transcribe="true" transcribeCallback="https://your-webhook-url.com/transcription"/>
+```
+
+### Recording Features
+
+- **Automatic transcription**: Twilio converts speech to text
+- **Callback URL**: Receives transcription results when ready
+- **Recording access**: View and download recordings from the Twilio console
+
+### Accessing Recordings
+
+<Steps>
+  <Step title="Go to Call Logs">
+    Navigate to **Monitor** > **Logs** > **Calls** in the Twilio Console.
+  </Step>
+  
+  <Step title="Select a call">
+    Click on a call SID to view details.
+  </Step>
+  
+  <Step title="Download recording">
+    Find the recording section and download or play back the audio.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Common Issues
+
+**Call not connecting**
+- Verify your Twilio credentials are correct
+- Check that your phone number has voice capabilities
+- Ensure the WebSocket URL is accessible
+
+**No audio streaming**
+- Confirm the WebSocket connection is established
+- Check that the audio format is set to `g711_ulaw`
+- Verify firewall settings allow WebSocket connections
+
+**Transcription not working**
+- Ensure the callback URL is publicly accessible
+- Check webhook logs in the Twilio console
+- Verify the endpoint returns a 200 status code
+
+## Next Steps
+
+- [Configure OpenAI](/integration/openai-setup) for real-time voice processing
+- [Set up Supabase](/integration/supabase-setup) for data storage
+- Review [Architecture](/architecture) to understand the complete process

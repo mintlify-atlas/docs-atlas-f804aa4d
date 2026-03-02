@@ -1,0 +1,701 @@
+---
+title: System Architecture
+description: Understanding Highway's technical architecture and data flow
+---
+
+# System Architecture
+
+Highway is built on a modern, scalable architecture that integrates multiple services to deliver automated AI-powered phone verification. This page provides an in-depth look at the system components, their interactions, and the data flow during a verification call.
+
+## High-Level Architecture
+
+Highway consists of four primary components that work together to enable automated identity verification:
+
+```
+┌─────────────────┐
+│                 │
+│  Next.js        │
+│  Frontend       │◄────── User creates verification
+│  Dashboard      │
+│                 │
+└────────┬────────┘
+         │ HTTPS/API
+         ▼
+┌─────────────────┐
+│                 │
+│  Express.js     │◄────── WebSocket ────►┌──────────────┐
+│  Backend        │                        │              │
+│  + WebSocket    │◄────── HTTPS ─────────►│   Twilio     │
+│  Server         │                        │   Voice      │
+│                 │                        │   Gateway    │
+└────────┬────────┘                        └──────┬───────┘
+         │                                        │
+         │ WebSocket                              │ Phone Call
+         ▼                                        ▼
+┌─────────────────┐                       ┌──────────────┐
+│                 │                       │              │
+│  OpenAI         │                       │  Customer    │
+│  Realtime API   │                       │  Phone       │
+│  (GPT-4o)       │                       │              │
+│                 │                       │              │
+└─────────────────┘                       └──────────────┘
+         ▲
+         │
+         ▼
+┌─────────────────┐
+│                 │
+│  Supabase       │
+│  Database       │
+│  (PostgreSQL)   │
+│                 │
+└─────────────────┘
+```
+
+## Core Components
+
+### Frontend Dashboard (Next.js + Mantine UI)
+
+**Technology Stack:**
+- Next.js 14 with React 18
+- Mantine UI v7 component library
+- TypeScript for type safety
+- Supabase client for database access
+
+**Key Features:**
+- **Verifications Management**: Create and manage customer verification records
+- **Call Initiation**: Trigger automated verification calls
+- **Real-time Monitoring**: View call status and verification results
+- **Call Logs**: Browse historical call records with collapsible details
+- **JSON Data Editor**: Define custom verification data for each customer
+
+**Main Pages:**
+
+1. **Home Page** (`src/app/page.tsx`):
+   - Displays pending verifications table
+   - Add verification modal with form validation
+   - Initiate call button for each verification
+   - View verification data in formatted JSON
+
+2. **Calls Page** (`src/app/calls/page.tsx`):
+   - Call logs with status badges
+   - Collapsible call details
+   - Verification data display
+   - Status color coding (successful, unsuccessful, in progress, etc.)
+
+**API Integration:**
+The frontend communicates with the backend via REST API calls defined in `src/utils/api.ts`:
+
+```typescript
+const API_BASE_URL = "https://your-backend-url";
+
+export async function callCustomer(
+  phoneNumber: string,
+  verificationId: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/call-customer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      to: phoneNumber, 
+      verification: verificationId 
+    }),
+  });
+}
+```
+
+### Backend Server (Express.js + WebSocket)
+
+**Technology Stack:**
+- Express.js web framework
+- express-ws for WebSocket support
+- Twilio SDK for phone call management
+- OpenAI SDK for Realtime API access
+- Supabase client for database operations
+- Winston for structured logging
+
+**Core Modules:**
+
+1. **Main Server** (`index.js`):
+   - Initializes Express app with WebSocket support
+   - Configures CORS for frontend communication
+   - Sets up route handlers and WebSocket endpoints
+   - Starts HTTP server on configured port
+
+2. **Routes** (`routes.js`):
+   - `GET /`: Health check endpoint
+   - `POST /call-customer`: Initiates Twilio call with TwiML
+   - Creates call record in Supabase
+   - Returns call SID for tracking
+
+3. **WebSocket Handler** (`websocket.js`):
+   - Endpoint: `/media-stream/:id/:numid`
+   - Manages bidirectional audio streaming
+   - Connects to OpenAI Realtime API
+   - Handles media events from Twilio
+   - Processes OpenAI responses and function calls
+   - Updates call status in database
+
+4. **Configuration** (`config.js`):
+   - Environment variable management
+   - OpenAI API key and model settings
+   - Twilio credentials
+   - System message and voice configuration
+   - Event logging preferences
+
+5. **Conversation Config** (`conversationConfig.js`):
+   - Session configuration for OpenAI Realtime API
+   - Voice activity detection (VAD) settings
+   - Audio format configuration (g711_ulaw)
+   - AI instructions and behavior
+   - Function definitions (hang_up_call, call_reflection_data)
+
+**Key Configuration:**
+
+```javascript
+const sessionConfig = {
+  turn_detection: {
+    type: "server_vad",
+    threshold: 0.95,
+  },
+  input_audio_format: "g711_ulaw",
+  output_audio_format: "g711_ulaw",
+  voice: "shimmer",
+  instructions: SYSTEM_MESSAGE,
+  modalities: ["text", "audio"],
+  temperature: 0.6,
+  tools: [
+    // hang_up_call function
+    // call_reflection_data function
+  ],
+};
+```
+
+### WebSocket Server
+
+The WebSocket server handles real-time audio streaming between Twilio and OpenAI:
+
+**Connection Flow:**
+
+1. Client (Twilio) connects to `/media-stream/:id/:numid`
+2. Backend establishes connection to OpenAI Realtime API
+3. Backend fetches verification data from Supabase
+4. Session configuration sent to OpenAI
+5. AI receives system prompt with verification data
+6. Bidirectional audio streaming begins
+
+**Message Handling:**
+
+- **From Twilio**:
+  - `start`: Stream initialization with streamSid
+  - `media`: Audio payload in base64 (g711_ulaw)
+  - Forwarded to OpenAI as `input_audio_buffer.append`
+
+- **From OpenAI**:
+  - `response.audio.delta`: AI voice response audio
+  - `response.function_call_arguments.done`: Function execution results
+  - `session.updated`: Configuration confirmation
+  - Audio deltas forwarded back to Twilio
+
+**Function Calls:**
+
+The AI can invoke two functions:
+
+1. **hang_up_call**: Ends the call gracefully
+   - Called when verification is complete
+   - Customer explicitly requests to hang up
+
+2. **call_reflection_data**: Updates call status
+   - Parameters: status (successful_call, unsuccessful_call, etc.)
+   - Updates Supabase calls table
+
+### External Integrations
+
+#### Twilio Voice Integration
+
+**Purpose:** Handles phone call infrastructure and audio streaming
+
+**Call Initiation:**
+```javascript
+const call = await client.calls.create({
+  to: phoneNumber,
+  from: TWILIO_PHONE_NUMBER,
+  twiml: `<?xml version="1.0" encoding="UTF-8"?>
+    <Response>
+      <Connect>
+        <Stream url="wss://${host}/media-stream/${verificationId}/${callId}" />
+        <Record transcribe="true" transcribeCallback="https://webhook-url"/>
+      </Connect>
+      <Hangup/>
+    </Response>`,
+});
+```
+
+**TwiML Components:**
+- `<Connect>`: Establishes WebSocket connection
+- `<Stream>`: Streams audio to/from backend WebSocket
+- `<Record>`: Optional call recording with transcription
+- `<Hangup>`: Ends call after stream closes
+
+**Audio Format:**
+- Format: G.711 μ-law (g711_ulaw)
+- Sample Rate: 8 kHz
+- Encoding: Base64
+- Compatible with OpenAI Realtime API
+
+#### OpenAI Realtime API
+
+**Purpose:** Powers the AI voice conversation engine
+
+**Model:** GPT-4o Realtime Preview (2024-10-01)
+
+**Connection:**
+```javascript
+const openAiWs = new WebSocket(
+  "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
+  {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "OpenAI-Beta": "realtime=v1",
+    },
+  }
+);
+```
+
+**Capabilities:**
+- Real-time voice-to-voice conversation
+- Server-side voice activity detection (VAD)
+- Function calling for programmatic actions
+- Natural language understanding
+- Context-aware questioning
+
+**AI Instructions:**
+```javascript
+const SYSTEM_MESSAGE = 
+  "You are a cheerful phone assistant. You work for Olive Financial and do very 
+  specific thinks that the SYSTEM tells you. The SYSTEM will speak to you in the 
+  following format: `SYSTEM:(MESSAGE)`. You only do what is asked of you by SYSTEM 
+  and do not ask any additional questions.";
+```
+
+#### Supabase Database
+
+**Purpose:** Persistent storage for verifications and call records
+
+**Database Schema:**
+
+**verifications table:**
+```sql
+CREATE TABLE verifications (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  data JSONB,
+  type TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+**calls table:**
+```sql
+CREATE TABLE calls (
+  id BIGSERIAL PRIMARY KEY,
+  verification BIGINT REFERENCES verifications(id),
+  status TEXT DEFAULT 'in_progress',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+**Status Values:**
+- `in_progress`: Call is currently active
+- `successful_call`: Identity verified successfully
+- `unsuccessful_call`: Identity not verified
+- `user_hung_up`: Customer ended call prematurely
+- `system_error`: Technical error occurred
+
+## Data Flow: Verification Call Lifecycle
+
+Let's walk through the complete flow of a verification call from initiation to completion:
+
+### Phase 1: Verification Creation
+
+<Steps>
+  <Step title="User Creates Verification">
+    User fills out the verification form in the frontend dashboard:
+    - Name: "John Doe"
+    - Phone: "5551234567"
+    - Background: "customer signed up for a loan"
+    - Verification Data: `{"date of birth": "1990-01-01", "address": "123 Main St"}`
+  </Step>
+  
+  <Step title="Data Saved to Supabase">
+    Frontend inserts record into `verifications` table:
+    ```javascript
+    const { data } = await supabase.from("verifications").insert({
+      name: "John Doe",
+      phone: "5551234567",
+      data: { "date of birth": "1990-01-01", "address": "123 Main St" },
+      type: "customer signed up for a loan"
+    });
+    ```
+    
+    Returns verification ID (e.g., `12345`)
+  </Step>
+</Steps>
+
+### Phase 2: Call Initiation
+
+<Steps>
+  <Step title="User Clicks 'Initiate Call'">
+    Frontend sends POST request to backend:
+    ```javascript
+    POST /call-customer
+    {
+      "to": "+15551234567",
+      "verification": "12345"
+    }
+    ```
+  </Step>
+  
+  <Step title="Backend Creates Call Record">
+    Backend inserts record into `calls` table:
+    ```javascript
+    const { data } = await supabase.from("calls").insert([{
+      verification: 12345,
+      status: "in_progress"
+    }]);
+    ```
+    
+    Returns call ID (e.g., `67890`)
+  </Step>
+  
+  <Step title="Twilio Call Created">
+    Backend initiates Twilio call with TwiML:
+    ```javascript
+    const call = await client.calls.create({
+      to: "+15551234567",
+      from: TWILIO_PHONE_NUMBER,
+      twiml: `<Response>
+        <Connect>
+          <Stream url="wss://backend-url/media-stream/12345/67890" />
+        </Connect>
+        <Hangup/>
+      </Response>`
+    });
+    ```
+    
+    Twilio begins calling the customer's phone
+  </Step>
+</Steps>
+
+### Phase 3: WebSocket Connection Establishment
+
+<Steps>
+  <Step title="Twilio Connects to Backend WebSocket">
+    When customer answers, Twilio opens WebSocket connection:
+    ```
+    wss://backend-url/media-stream/12345/67890
+    ```
+    
+    Parameters:
+    - `12345`: Verification ID
+    - `67890`: Call ID
+  </Step>
+  
+  <Step title="Backend Connects to OpenAI">
+    Backend establishes WebSocket to OpenAI Realtime API:
+    ```
+    wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01
+    ```
+  </Step>
+  
+  <Step title="Backend Fetches Verification Data">
+    Backend queries Supabase for verification details:
+    ```javascript
+    const { data } = await supabase
+      .from("verifications")
+      .select("*")
+      .eq("id", 12345);
+    ```
+    
+    Retrieves: name, phone, verification data, background
+  </Step>
+</Steps>
+
+### Phase 4: AI Session Configuration
+
+<Steps>
+  <Step title="Send Session Update to OpenAI">
+    Backend configures OpenAI session with:
+    - Voice: "shimmer"
+    - Audio format: g711_ulaw
+    - VAD threshold: 0.95
+    - Temperature: 0.6
+    - Available functions: hang_up_call, call_reflection_data
+  </Step>
+  
+  <Step title="Send System Prompt with Verification Data">
+    Backend sends initial system message:
+    ```javascript
+    const systemPrompt = `SYSTEM:(Explain to the customer that you are an agent 
+      with Olive Financial. Read the background from the identity provider and 
+      verify the information provided BUT do not confirm any information, just 
+      ask 2 questions one at a time based on the following data: 
+      ${JSON.stringify(verificationData)})`;
+    ```
+    
+    OpenAI AI now knows:
+    - It's calling on behalf of Olive Financial
+    - Customer background (signed up for loan)
+    - Data to verify (DOB, address)
+    - Ask questions one at a time
+  </Step>
+</Steps>
+
+### Phase 5: Real-time Audio Streaming
+
+<Steps>
+  <Step title="Customer Speaks">
+    Audio flow:
+    1. Customer speaks into phone
+    2. Twilio captures audio (g711_ulaw)
+    3. Twilio sends WebSocket message to backend:
+       ```json
+       {
+         "event": "media",
+         "media": {
+           "payload": "base64_encoded_audio"
+         }
+       }
+       ```
+    4. Backend forwards to OpenAI:
+       ```json
+       {
+         "type": "input_audio_buffer.append",
+         "audio": "base64_encoded_audio"
+       }
+       ```
+  </Step>
+  
+  <Step title="AI Processes and Responds">
+    OpenAI flow:
+    1. Receives customer audio via WebSocket
+    2. VAD detects speech completion
+    3. Processes audio with GPT-4o Realtime model
+    4. Generates appropriate response
+    5. Converts response to audio
+    6. Sends audio delta chunks:
+       ```json
+       {
+         "type": "response.audio.delta",
+         "delta": "base64_encoded_audio_chunk"
+       }
+       ```
+  </Step>
+  
+  <Step title="AI Audio Sent to Customer">
+    Backend to customer flow:
+    1. Backend receives audio delta from OpenAI
+    2. Formats for Twilio:
+       ```json
+       {
+         "event": "media",
+         "streamSid": "stream_sid",
+         "media": {
+           "payload": "base64_encoded_audio"
+         }
+       }
+       ```
+    3. Sends via WebSocket to Twilio
+    4. Twilio plays audio to customer's phone
+    5. Customer hears AI response
+  </Step>
+</Steps>
+
+### Phase 6: Verification Questions
+
+<Steps>
+  <Step title="AI Asks First Question">
+    AI: "Hi John, this is an automated call from Olive Financial. We need to verify 
+    some information for your loan application. Can you please confirm your date of birth?"
+  </Step>
+  
+  <Step title="Customer Responds">
+    Customer: "January 1st, 1990"
+    
+    Audio streams through Twilio → Backend → OpenAI
+  </Step>
+  
+  <Step title="AI Asks Second Question">
+    AI: "Thank you. And can you please verify your current address?"
+  </Step>
+  
+  <Step title="Customer Provides Address">
+    Customer: "123 Main Street"
+    
+    AI evaluates if information matches verification data
+  </Step>
+</Steps>
+
+### Phase 7: Call Completion
+
+<Steps>
+  <Step title="AI Determines Outcome">
+    Based on customer responses, AI determines verification status:
+    - Successful: Answers match verification data
+    - Unsuccessful: Answers don't match or customer refuses
+  </Step>
+  
+  <Step title="AI Calls Reflection Function">
+    AI invokes function to update status:
+    ```json
+    {
+      "type": "response.function_call_arguments.done",
+      "name": "call_reflection_data",
+      "arguments": {
+        "status": "successful_call"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Backend Updates Database">
+    Backend updates call status in Supabase:
+    ```javascript
+    await supabase
+      .from("calls")
+      .update({ status: "successful_call" })
+      .eq("id", 67890);
+    ```
+  </Step>
+  
+  <Step title="AI Hangs Up">
+    AI: "Thank you for your time, John. Your identity has been verified. Have a great day!"
+    
+    AI calls hang_up_call function:
+    ```json
+    {
+      "type": "response.function_call_arguments.done",
+      "name": "hang_up_call",
+      "arguments": {
+        "hangup": true
+      }
+    }
+    ```
+    
+    Backend closes WebSocket connection, Twilio ends call
+  </Step>
+</Steps>
+
+### Phase 8: Results Review
+
+<Steps>
+  <Step title="User Views Call Logs">
+    User navigates to Calls page in dashboard
+  </Step>
+  
+  <Step title="Frontend Fetches Results">
+    Frontend queries Supabase:
+    ```javascript
+    const { data: calls } = await supabase
+      .from("calls")
+      .select("*")
+      .order("created_at", { ascending: false });
+    
+    const { data: verifications } = await supabase
+      .from("verifications")
+      .select("*")
+      .in("id", verificationIds);
+    ```
+  </Step>
+  
+  <Step title="Results Displayed">
+    Dashboard shows:
+    - Call ID: 67890
+    - Customer: John Doe
+    - Status: IDENTITY VERIFIED (green badge)
+    - Timestamp: 2024-03-02 14:30:15
+    - Verification data: date of birth, address, etc.
+  </Step>
+</Steps>
+
+## Technology Stack Summary
+
+### Frontend
+- **Framework**: Next.js 14
+- **UI Library**: Mantine v7.13
+- **Language**: TypeScript
+- **State Management**: React hooks (useState, useEffect)
+- **Form Handling**: @mantine/form
+- **Database Client**: @supabase/supabase-js
+- **Icons**: @tabler/icons-react
+
+### Backend
+- **Runtime**: Node.js
+- **Framework**: Express.js 4.21
+- **WebSocket**: express-ws 5.0
+- **Language**: JavaScript
+- **Validation**: Joi 17.13
+- **Logging**: Winston 3.15
+- **Database Client**: @supabase/supabase-js 2.45
+- **Phone Service**: Twilio SDK 5.3
+- **AI Service**: OpenAI SDK 4.67
+
+### Infrastructure
+- **Database**: Supabase (PostgreSQL)
+- **Voice Gateway**: Twilio Voice API
+- **AI Engine**: OpenAI Realtime API (GPT-4o)
+- **Audio Protocol**: WebSocket
+- **Audio Format**: G.711 μ-law
+
+## Security Considerations
+
+<Warning>
+  **API Keys and Secrets**: All sensitive credentials (Twilio, OpenAI, Supabase) should be stored in environment variables and never committed to version control.
+</Warning>
+
+**Key Security Measures:**
+
+1. **Environment Variables**: Sensitive data in `.env` files
+2. **CORS Configuration**: Restrict frontend origins in production
+3. **Supabase RLS**: Implement Row Level Security policies
+4. **HTTPS/WSS**: Use encrypted connections in production
+5. **API Rate Limiting**: Implement rate limiting on backend endpoints
+6. **Input Validation**: Validate all user inputs with Joi schemas
+7. **Webhook Authentication**: Verify Twilio webhook signatures
+
+## Scalability Considerations
+
+**Current Architecture Limitations:**
+- Single backend server handles all WebSocket connections
+- No horizontal scaling for WebSocket connections
+- Database queries not optimized for high volume
+
+**Recommended Improvements for Scale:**
+
+1. **Load Balancing**: Deploy multiple backend instances with sticky sessions
+2. **Redis**: Add Redis for session management and caching
+3. **Message Queue**: Use RabbitMQ or AWS SQS for async processing
+4. **Connection Pooling**: Implement Supabase connection pooling
+5. **CDN**: Serve frontend static assets via CDN
+6. **Monitoring**: Add Datadog, New Relic, or custom metrics
+7. **Auto-scaling**: Configure cloud auto-scaling based on CPU/memory
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration Guide" icon="gear" href="/api/configuration/conversation-config">
+    Learn how to customize AI behavior, voice settings, and conversation flow
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore detailed API endpoint documentation and WebSocket event schemas
+  </Card>
+  
+  <Card title="Deployment Guide" icon="cloud" href="/setup/deployment">
+    Deploy Highway to production with AWS, Google Cloud, or other providers
+  </Card>
+  
+  <Card title="Setup & Configuration" icon="wrench" href="/setup/backend-setup">
+    Setup guides for backend, frontend, and environment configuration
+  </Card>
+</CardGroup>

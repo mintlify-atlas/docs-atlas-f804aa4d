@@ -1,0 +1,317 @@
+---
+title: 'Frontend Setup'
+description: 'Set up and configure the Highway Next.js frontend'
+---
+
+The Highway frontend is built with Next.js 14, Mantine UI, and TypeScript, providing a modern interface for managing voice verification calls.
+
+## Installing Dependencies
+
+<Steps>
+  <Step title="Navigate to frontend directory">
+    ```bash
+    cd highway-frontend
+    ```
+  </Step>
+
+  <Step title="Install npm packages">
+    ```bash
+    npm install
+    ```
+
+    This will install key dependencies:
+    - `next` (v14.2.15) - React framework
+    - `react` & `react-dom` - React core libraries
+    - `@mantine/core` - UI component library
+    - `@mantine/*` - Mantine ecosystem packages
+    - `@supabase/supabase-js` - Supabase client
+    - `@tabler/icons-react` - Icon library
+    - `typescript` - TypeScript support
+  </Step>
+
+  <Step title="Configure environment variables">
+    Create a `.env.local` file in the frontend directory. See [Environment Variables](/setup/environment-variables) for Supabase configuration.
+  </Step>
+</Steps>
+
+## Mantine UI Setup
+
+Highway uses Mantine v7 for its UI components. The configuration is handled in the root layout:
+
+### Theme Configuration
+
+The app uses a **dark theme** with custom color palette:
+
+```tsx src/app/layout.tsx
+const theme = createTheme({
+  black: "#0c0d21",
+  colors: {
+    dark: [
+      "#d5d7e0",
+      "#acaebf",
+      "#8c8fa3",
+      "#666980",
+      "#4d4f66",
+      "#34354a",
+      "#2b2c3d",
+      "#1d1e30",
+      "#0c0d21",
+      "#01010a",
+    ],
+  },
+  primaryColor: "dark",
+});
+```
+
+### MantineProvider Setup
+
+```tsx src/app/layout.tsx
+import { MantineProvider, ColorSchemeScript } from "@mantine/core";
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <head>
+        <ColorSchemeScript />
+      </head>
+      <body>
+        <MantineProvider theme={theme}>
+          {children}
+        </MantineProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Installed Mantine Packages
+
+Highway includes the full Mantine ecosystem:
+- `@mantine/core` - Core components
+- `@mantine/hooks` - Useful React hooks
+- `@mantine/form` - Form management
+- `@mantine/notifications` - Toast notifications
+- `@mantine/modals` - Modal dialogs
+- `@mantine/dates` - Date picker components
+- `@mantine/charts` - Chart components (with Recharts)
+- `@mantine/carousel` - Carousel component
+- `@mantine/dropzone` - File upload
+- `@mantine/spotlight` - Command palette
+- `@mantine/code-highlight` - Code highlighting
+- `@mantine/tiptap` - Rich text editor
+- `@mantine/nprogress` - Progress bar
+
+## Directory Structure
+
+The frontend follows Next.js App Router structure:
+
+```
+highway-frontend/
+├── src/
+│   ├── app/              # Next.js app directory
+│   │   ├── layout.tsx    # Root layout with Mantine provider
+│   │   ├── page.tsx      # Dashboard page
+│   │   ├── calls/        # Call logs page
+│   │   ├── globals.css   # Global styles
+│   │   └── fonts/        # Custom fonts (Geist)
+│   ├── components/       # Reusable components
+│   └── utils/            # Utility functions
+├── public/               # Static assets
+├── package.json
+├── tsconfig.json         # TypeScript configuration
+├── tailwind.config.ts    # Tailwind CSS config
+├── postcss.config.cjs    # PostCSS config
+└── next.config.mjs       # Next.js configuration
+```
+
+### Key Directories
+
+**src/app/** - Application pages and layouts
+- Uses Next.js 14 App Router
+- Server and client components
+- File-based routing
+
+**src/components/** - Reusable React components
+- UI components
+- Shared layout components
+
+**src/utils/** - Utility functions and helpers
+- Supabase client configuration
+- Helper functions
+
+## Starting the Dev Server
+
+<CodeGroup>
+```bash Development
+cd highway-frontend
+npm run dev
+```
+
+```bash Custom port
+cd highway-frontend
+npm run dev -- -p 3001
+```
+</CodeGroup>
+
+The dev server will start at:
+```
+http://localhost:3000
+```
+
+<Note>
+The development server includes hot module replacement (HMR) for instant updates.
+</Note>
+
+## Building for Production
+
+<Steps>
+  <Step title="Create production build">
+    ```bash
+    npm run build
+    ```
+
+    This command:
+    - Compiles TypeScript
+    - Optimizes React components
+    - Generates static pages
+    - Creates production bundles
+  </Step>
+
+  <Step title="Test production build locally">
+    ```bash
+    npm run start
+    ```
+
+    Serves the production build at `http://localhost:3000`
+  </Step>
+
+  <Step title="Verify build output">
+    Check the `.next` directory for generated files:
+    ```bash
+    ls -la .next
+    ```
+  </Step>
+</Steps>
+
+## Theme Customization
+
+### Color Palette
+
+The dark theme uses a custom gray-blue palette:
+
+| Shade | Color | Usage |
+|-------|-------|-------|
+| 0 | `#d5d7e0` | Lightest text |
+| 1 | `#acaebf` | Secondary text |
+| 2 | `#8c8fa3` | Muted text |
+| 6 | `#2b2c3d` | Borders |
+| 7 | `#1d1e30` | Navbar background |
+| 8 | `#0c0d21` | Main background |
+| 9 | `#01010a` | Darkest shade |
+
+### AppShell Configuration
+
+The layout uses Mantine's AppShell component:
+
+```tsx
+<AppShell
+  navbar={{
+    width: 300,
+    breakpoint: "sm",
+    collapsed: { mobile: !opened },
+  }}
+  padding="md"
+  styles={(theme) => ({
+    main: {
+      backgroundColor: theme.colors?.dark?.[8],
+      color: theme.colors?.dark?.[0],
+    },
+    navbar: {
+      borderRight: `2px solid ${theme.colors?.dark?.[6]}`,
+    },
+  })}
+>
+  <AppShell.Navbar>...</AppShell.Navbar>
+  <AppShell.Main>{children}</AppShell.Main>
+</AppShell>
+```
+
+### Custom Fonts
+
+Highway uses Geist fonts:
+- **Geist Sans** - Primary UI font
+- **Geist Mono** - Monospace font
+
+Both are configured as variable fonts with weights 100-900.
+
+## PostCSS Configuration
+
+The app uses PostCSS with Mantine preset:
+
+```javascript postcss.config.cjs
+module.exports = {
+  plugins: {
+    'postcss-preset-mantine': {},
+    'postcss-simple-vars': {},
+  },
+};
+```
+
+## TypeScript Configuration
+
+TypeScript is configured with Next.js-optimized settings:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true
+  }
+}
+```
+
+## Linting
+
+Run ESLint to check code quality:
+
+```bash
+npm run lint
+```
+
+## Verification
+
+Test your frontend setup:
+
+<Steps>
+  <Step title="Check dev server">
+    Navigate to `http://localhost:3000` and verify the dashboard loads.
+  </Step>
+
+  <Step title="Test navigation">
+    - Click "Dashboard" in the sidebar
+    - Click "Verification Call Logs"
+    - Verify navigation works correctly
+  </Step>
+
+  <Step title="Check Mantine theme">
+    - Verify dark theme is applied
+    - Check that colors match the design
+    - Test responsive navbar (resize browser)
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="gear" href="/setup/environment-variables">
+    Configure Supabase and other frontend variables
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/setup/deployment">
+    Deploy your frontend to production
+  </Card>
+</CardGroup>

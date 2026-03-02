@@ -1,0 +1,95 @@
+---
+title: REST API Overview
+description: Overview of the Highway REST API for managing voice calls
+---
+
+## Base URL
+
+The Highway API is accessible at your deployed server endpoint:
+
+```
+https://your-server.com
+```
+
+## Authentication
+
+The Highway backend uses Twilio credentials for making outbound calls. Authentication is handled server-side using:
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_PHONE_NUMBER`
+
+These credentials should be configured as environment variables on your server.
+
+## Request Format
+
+All API requests should be sent with `Content-Type: application/json` header. Request bodies must be valid JSON.
+
+```json
+{
+  "to": "+1234567890",
+  "verification": 12345
+}
+```
+
+## Response Format
+
+All API responses are returned in JSON format or as plain text messages depending on the endpoint.
+
+**Success Response Example:**
+```json
+{
+  "message": "Running"
+}
+```
+
+**Error Response Example:**
+```
+"to" is required
+```
+
+## Error Handling
+
+The API uses standard HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 400 | Bad Request - Validation error |
+| 500 | Internal Server Error |
+
+### Error Messages
+
+Validation errors return descriptive messages indicating which fields are missing or invalid:
+
+- `"to" is required` - Phone number parameter missing
+- `"verification" is required` - Verification ID parameter missing
+- `Failed to initiate call: {error message}` - Server error when calling Twilio
+
+## CORS Configuration
+
+The API includes CORS middleware to handle cross-origin requests. Configure CORS settings based on your deployment needs.
+
+## Rate Limiting
+
+<Note>
+Rate limiting is determined by your Twilio account limits and plan. Check your Twilio dashboard for current limits on concurrent calls and API requests.
+</Note>
+
+## Database Integration
+
+The API uses Supabase for storing call records. Each call is tracked with:
+
+- `verification` - Verification ID
+- `status` - Call status (e.g., "in_progress")
+- `id` - Auto-generated call record ID
+
+## WebSocket Streaming
+
+The API integrates with Twilio's media streaming via WebSocket connections at:
+
+```
+wss://your-server.com/media-stream/{verification}/{callId}
+```
+
+This enables real-time audio streaming for voice AI interactions.

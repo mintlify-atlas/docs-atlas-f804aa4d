@@ -1,0 +1,517 @@
+---
+title: 'Call Monitoring'
+description: 'Track and analyze verification call status and outcomes'
+icon: 'chart-line'
+---
+
+## Overview
+
+The Call Monitoring dashboard provides real-time visibility into all verification calls made by Highway. Track call status, review verification outcomes, and analyze call history to ensure your identity verification process is running smoothly.
+
+## Accessing Call Logs
+
+Navigate to the **Verifications Call Logs** page to view all calls:
+
+```
+/calls
+```
+
+The call monitoring interface is implemented in `highway-frontend/src/app/calls/page.tsx` and displays calls in reverse chronological order (newest first).
+
+## Real-Time Call Status Tracking
+
+Highway tracks each call through its complete lifecycle with automatic status updates.
+
+### Status Flow
+
+<Steps>
+  <Step title="in_progress">
+    Call is currently active. The AI agent is speaking with the customer.
+    
+    <Note>
+      This status is set immediately when the call is initiated (`highway-backend/routes.js:35-44`).
+    </Note>
+  </Step>
+  
+  <Step title="Status Determination">
+    As the call progresses, the AI agent evaluates customer responses to determine verification outcome.
+  </Step>
+  
+  <Step title="Final Status">
+    When the call ends, the status is updated to one of the completion states:
+    - **successful_call** - Identity verified
+    - **unsuccessful_call** - Identity not verified  
+    - **user_hung_up** - Customer ended call early
+    - **system_error** - Technical failure
+  </Step>
+</Steps>
+
+### Status Updates
+
+Status changes are automatically recorded when the AI calls the `call_reflection_data` function (`highway-backend/websocket.js:86-92`):
+
+```javascript
+if (response.type === "response.function_call_arguments.done") {
+  console.log("arguments", response.arguments);
+  supabase
+    .from("calls")
+    .update({ status: response.arguments.status })
+    .eq("id", callId);
+}
+```
+
+## Call Logs and History
+
+The call monitoring dashboard displays all verification calls with key information.
+
+### Data Fetching
+
+From `highway-frontend/src/app/calls/page.tsx:40-80`:
+
+```typescript
+const fetchData = async () => {
+  const supabase = createClient();
+  
+  // Fetch calls
+  const { data: callsData, error: callsError } = await supabase
+    .from("calls")
+    .select("*")
+    .order("created_at", { ascending: false });
+    
+  // Fetch corresponding verifications
+  const verificationIds = [
+    ...new Set(callsData?.map((call) => call.verification)),
+  ];
+  
+  const { data: verificationsData, error: verificationsError } =
+    await supabase
+      .from("verifications")
+      .select("*")
+      .in("id", verificationIds);
+      
+  // Create verification lookup map
+  const verificationsMap = verificationsData?.reduce(
+    (acc, verification) => {
+      acc[verification.id] = verification;
+      return acc;
+    },
+    {}
+  );
+  setVerifications(verificationsMap);
+};
+```
+
+<Note>
+  Calls are joined with their associated verification records to display customer information alongside call status.
+</Note>
+
+### Display Format
+
+Each call is shown in a collapsible card with:
+
+- **Header:** Customer name, call ID, and status badge
+- **Details:** Phone number, timestamp, verification data (expandable)
+
+## Status Types
+
+Highway uses five distinct status types to categorize call outcomes.
+
+### Status Definitions
+
+<Tabs>
+  <Tab title="successful_call">
+    <div style={{padding: '10px', backgroundColor: '#0d9488', color: 'white', borderRadius: '5px', marginBottom: '10px'}}>
+      **IDENTITY VERIFIED**
+    </div>
+    
+    The customer successfully answered the verification questions correctly. Their identity has been confirmed.
+    
+    **When this occurs:**
+    - Customer provided correct answers to verification questions
+    - AI agent determined responses matched verification data
+    - Call completed normally
+    
+    **Next steps:**
+    - Proceed with account activation or service provisioning
+    - Customer is verified and ready to use your service
+  </Tab>
+  
+  <Tab title="unsuccessful_call">
+    <div style={{padding: '10px', backgroundColor: '#eab308', color: 'white', borderRadius: '5px', marginBottom: '10px'}}>
+      **IDENTITY NOT VERIFIED**
+    </div>
+    
+    The customer was unable to correctly answer the verification questions. Identity could not be confirmed.
+    
+    **When this occurs:**
+    - Customer provided incorrect answers
+    - Customer couldn't remember required information
+    - Call completed but verification failed
+    
+    **Next steps:**
+    - Review verification data for accuracy
+    - Consider alternative verification methods
+    - May require manual verification or additional documentation
+    - Potentially retry with different questions
+  </Tab>
+  
+  <Tab title="user_hung_up">
+    <div style={{padding: '10px', backgroundColor: '#ef4444', color: 'white', borderRadius: '5px', marginBottom: '10px'}}>
+      **USER HUNG UP**
+    </div>
+    
+    The customer ended the call before verification could be completed.
+    
+    **When this occurs:**
+    - Customer disconnected during the conversation
+    - Call ended prematurely
+    - Verification questions were not fully answered
+    
+    **Next steps:**
+    - Attempt to contact customer again
+    - Investigate if call timing or approach needs adjustment
+    - Consider if questions were unclear or concerning
+    - Review call timing (time of day, timezone)
+  </Tab>
+  
+  <Tab title="system_error">
+    <div style={{padding: '10px', backgroundColor: '#f97316', color: 'white', borderRadius: '5px', marginBottom: '10px'}}>
+      **SYSTEM ERROR**
+    </div>
+    
+    A technical error prevented the call from completing successfully.
+    
+    **When this occurs:**
+    - WebSocket connection failed
+    - OpenAI API error
+    - Twilio connection issue
+    - Audio streaming problem
+    
+    **Next steps:**
+    - Check server logs for error details
+    - Verify API credentials (OpenAI, Twilio)
+    - Test network connectivity
+    - Retry the call once issues are resolved
+  </Tab>
+  
+  <Tab title="in_progress">
+    <div style={{padding: '10px', backgroundColor: '#3b82f6', color: 'white', borderRadius: '5px', marginBottom: '10px'}}>
+      **IN PROGRESS**
+    </div>
+    
+    The call is currently active and ongoing.
+    
+    **When this occurs:**
+    - Call was just initiated
+    - AI agent is currently speaking with customer
+    - Verification is in process
+    
+    **What to expect:**
+    - Status will update automatically when call completes
+    - Typical call duration: 1-3 minutes
+    - Do not initiate another call for this verification
+  </Tab>
+</Tabs>
+
+### Status Badge Colors
+
+From `highway-frontend/src/app/calls/page.tsx:86-108`:
+
+```typescript
+const getStatusBadge = (status: string) => {
+  const statusColors: { [key: string]: string } = {
+    user_hung_up: "red",
+    system_error: "orange",
+    unsuccessful_call: "yellow",
+    successful_call: "teal",
+    in_progress: "blue",
+  };
+  
+  const statusLabels: { [key: string]: string } = {
+    user_hung_up: "USER HUNG UP",
+    system_error: "SYSTEM ERROR",
+    unsuccessful_call: "IDENTITY NOT VERIFIED",
+    successful_call: "IDENTITY VERIFIED",
+    in_progress: "IN PROGRESS",
+  };
+  
+  return (
+    <Badge color={statusColors[status] || "gray"} size="md">
+      {statusLabels[status] || status.replace(/_/g, " ").toUpperCase()}
+    </Badge>
+  );
+};
+```
+
+## Viewing Call Details
+
+Click on any call in the list to expand and view detailed information.
+
+### Call Summary
+
+Each expanded call shows:
+
+<CardGroup cols={2}>
+  <Card title="Customer Information" icon="user">
+    - Customer name from verification record
+    - Phone number called
+    - Call ID for reference
+  </Card>
+  
+  <Card title="Call Metadata" icon="clock">
+    - Current call status
+    - Created timestamp (when call was initiated)
+    - Formatted in local timezone
+  </Card>
+</CardGroup>
+
+### Verification Data Display
+
+From `highway-frontend/src/app/calls/page.tsx:171-185`:
+
+```typescript
+<div style={{ marginTop: "10px", fontWeight: 800 }}>
+  Verification Data:
+</div>
+<pre
+  style={{
+    whiteSpace: "pre-wrap",
+    wordWrap: "break-word",
+    backgroundColor: theme.colors?.dark?.[5],
+    padding: "10px",
+    borderRadius: "5px",
+    marginTop: "5px",
+  }}
+>
+  {JSON.stringify(verification?.data, null, 2)}
+</pre>
+```
+
+The verification data section shows the exact JSON data that was used during the verification call, formatted for readability.
+
+<Accordion title="Example Verification Data Display">
+  ```json
+  {
+    "date_of_birth": "1990-01-01",
+    "address": "123 Main St, Anytown, USA",
+    "last_4_ssn": "1234",
+    "mother_maiden_name": "Johnson"
+  }
+  ```
+  
+  This helps you understand:
+  - What questions the AI asked
+  - What data points were verified
+  - Context for successful or unsuccessful outcomes
+</Accordion>
+
+## Call Analytics
+
+Use the call monitoring dashboard to analyze verification performance:
+
+### Key Metrics to Track
+
+<AccordionGroup>
+  <Accordion title="Success Rate" icon="chart-simple">
+    Calculate the percentage of successful verifications:
+    
+    ```
+    Success Rate = (successful_calls / total_completed_calls) × 100
+    ```
+    
+    **Target:** 70-85% success rate is typical for phone verification
+    
+    **Low success rate indicators:**
+    - Verification questions may be too difficult
+    - Data might be outdated or incorrect
+    - Questions unclear or ambiguous
+  </Accordion>
+  
+  <Accordion title="Hang-Up Rate" icon="phone-slash">
+    Monitor how often customers end calls early:
+    
+    ```
+    Hang-Up Rate = (user_hung_up / total_calls) × 100
+    ```
+    
+    **Target:** Below 15% hang-up rate
+    
+    **High hang-up rate indicators:**
+    - Call timing may be inconvenient
+    - Introduction unclear or alarming
+    - Questions feel invasive
+    - AI voice or pacing issues
+  </Accordion>
+  
+  <Accordion title="System Error Rate" icon="triangle-exclamation">
+    Track technical failures:
+    
+    ```
+    Error Rate = (system_errors / total_calls) × 100
+    ```
+    
+    **Target:** Below 5% error rate
+    
+    **Common causes:**
+    - OpenAI API issues
+    - Twilio connectivity problems
+    - Server resource constraints
+    - Network latency issues
+  </Accordion>
+  
+  <Accordion title="Call Volume Trends" icon="chart-line">
+    Analyze call patterns over time:
+    - Peak calling times
+    - Daily/weekly call volume
+    - Seasonal variations
+    - Response time from initiation
+    
+    Use `created_at` timestamps to identify trends and optimize calling schedules.
+  </Accordion>
+</AccordionGroup>
+
+### Analysis Examples
+
+<CodeGroup>
+```sql Successful Calls Query
+SELECT COUNT(*) as successful_count
+FROM calls
+WHERE status = 'successful_call'
+AND created_at >= NOW() - INTERVAL '30 days';
+```
+
+```sql Success Rate by Date
+SELECT 
+  DATE(created_at) as call_date,
+  COUNT(*) as total_calls,
+  SUM(CASE WHEN status = 'successful_call' THEN 1 ELSE 0 END) as successful,
+  ROUND(100.0 * SUM(CASE WHEN status = 'successful_call' THEN 1 ELSE 0 END) / COUNT(*), 2) as success_rate
+FROM calls
+GROUP BY DATE(created_at)
+ORDER BY call_date DESC;
+```
+
+```sql Error Analysis
+SELECT 
+  status,
+  COUNT(*) as count,
+  ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) as percentage
+FROM calls
+WHERE created_at >= NOW() - INTERVAL '7 days'
+GROUP BY status
+ORDER BY count DESC;
+```
+</CodeGroup>
+
+## Monitoring Best Practices
+
+<AccordionGroup>
+  <Accordion title="Regular Review" icon="calendar">
+    - Check call logs daily during initial deployment
+    - Review weekly once system is stable
+    - Investigate any unusual status patterns immediately
+    - Monitor for clusters of errors or hang-ups
+  </Accordion>
+  
+  <Accordion title="Status Investigation" icon="magnifying-glass">
+    **For unsuccessful_call:**
+    - Review verification data accuracy
+    - Consider if questions are too difficult
+    - Check if data is current and correct
+    
+    **For user_hung_up:**
+    - Listen to call recordings (if enabled)
+    - Review AI introduction script
+    - Check call timing and customer timezone
+    
+    **For system_error:**
+    - Check server logs immediately
+    - Verify API credentials and quotas
+    - Test WebSocket connectivity
+  </Accordion>
+  
+  <Accordion title="Data Quality" icon="database">
+    - Ensure verification data is accurate before calling
+    - Update outdated customer information
+    - Remove or fix verifications with invalid data
+    - Test verification questions with sample calls
+  </Accordion>
+  
+  <Accordion title="Performance Optimization" icon="gauge-high">
+    - Track average call duration
+    - Monitor OpenAI API latency
+    - Measure time-to-first-response
+    - Optimize VAD threshold if needed
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Common Issues
+
+<Warning>
+  **Calls Stuck in "in_progress"**
+  
+  If calls remain in progress status indefinitely:
+  
+  1. Check if WebSocket connection is closing properly
+  2. Verify `call_reflection_data` function is being called
+  3. Review server logs for WebSocket errors
+  4. Ensure Twilio is sending disconnect events
+  
+  **Fix:** The status update happens on WebSocket close (`highway-backend/websocket.js:153-165`). Verify this event is firing.
+</Warning>
+
+<Warning>
+  **Missing Verification Data**
+  
+  If verification data shows as "N/A" or undefined:
+  
+  1. Verify verification record exists in database
+  2. Check that `verification` foreign key is set correctly in calls table
+  3. Ensure verification wasn't deleted after call was initiated
+  4. Review data fetching logic for joins
+</Warning>
+
+### Debugging Steps
+
+<Steps>
+  <Step title="Check Database">
+    Verify call record exists and has correct verification ID:
+    ```sql
+    SELECT * FROM calls WHERE id = [call_id];
+    ```
+  </Step>
+  
+  <Step title="Review Server Logs">
+    Look for WebSocket errors or API failures in backend logs
+  </Step>
+  
+  <Step title="Test API Connections">
+    Verify OpenAI and Twilio APIs are accessible and responsive
+  </Step>
+  
+  <Step title="Check Network">
+    Ensure WebSocket connections can be established from your server
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Phone Calls" icon="robot" href="/features/ai-phone-calls">
+    Understand how the AI conducts verification calls
+  </Card>
+  
+  <Card title="Verification Management" icon="clipboard-check" href="/features/verification-management">
+    Learn how to create and manage verifications
+  </Card>
+  
+  <Card title="Supabase Integration" icon="database" href="/features/supabase-integration">
+    Explore the database schema and queries
+  </Card>
+  
+  <Card title="Setup Guide" icon="wrench" href="/setup/backend-setup">
+    Backend and frontend setup instructions
+  </Card>
+</CardGroup>

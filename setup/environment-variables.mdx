@@ -1,0 +1,329 @@
+---
+title: 'Environment Variables'
+description: 'Configure environment variables for Highway backend and frontend'
+---
+
+Highway requires several environment variables for both backend and frontend to function properly.
+
+## Backend Environment Variables
+
+Create a `.env` file in the `highway-backend` directory:
+
+### Required Variables
+
+<ParamField path="OPENAI_API_KEY" type="string" required>
+  Your OpenAI API key for accessing the Realtime API.
+  
+  Get your key from: [OpenAI API Keys](https://platform.openai.com/api-keys)
+</ParamField>
+
+<ParamField path="PORT" type="number" required>
+  Port number for the Express server.
+  
+  **Default**: 3000
+  
+  **Example**: `PORT=3000`
+</ParamField>
+
+<ParamField path="TWILIO_ACCOUNT_SID" type="string" required>
+  Your Twilio Account SID for making phone calls.
+  
+  Find this in: [Twilio Console](https://console.twilio.com/)
+</ParamField>
+
+<ParamField path="TWILIO_AUTH_TOKEN" type="string" required>
+  Your Twilio Auth Token for authenticating API requests.
+  
+  Find this in: [Twilio Console](https://console.twilio.com/)
+</ParamField>
+
+<ParamField path="TWILIO_PHONE_NUMBER" type="string" required>
+  Your Twilio phone number in E.164 format (e.g., +1234567890).
+  
+  Must be a verified Twilio number that can make outbound calls.
+</ParamField>
+
+### Backend .env Example
+
+```bash .env
+# OpenAI Configuration
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Server Configuration
+PORT=3000
+
+# Twilio Configuration
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_PHONE_NUMBER=+1234567890
+```
+
+## Frontend Environment Variables
+
+Create a `.env.local` file in the `highway-frontend` directory:
+
+### Required Variables
+
+<ParamField path="NEXT_PUBLIC_SUPABASE_URL" type="string" required>
+  Your Supabase project URL.
+  
+  Find this in: [Supabase Dashboard](https://app.supabase.com/) → Project Settings → API
+  
+  **Format**: `https://your-project.supabase.co`
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_SUPABASE_ANON_KEY" type="string" required>
+  Your Supabase anonymous (public) key.
+  
+  Find this in: [Supabase Dashboard](https://app.supabase.com/) → Project Settings → API
+  
+  This key is safe to use in the browser.
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_BACKEND_URL" type="string" optional>
+  URL of your Highway backend server.
+  
+  **Development**: `http://localhost:3000`
+  
+  **Production**: Your deployed backend URL
+</ParamField>
+
+### Frontend .env.local Example
+
+```bash .env.local
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+# Backend API URL
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+```
+
+<Note>
+Next.js requires environment variables used in the browser to be prefixed with `NEXT_PUBLIC_`.
+</Note>
+
+## Configuration File Reference
+
+The backend `config.js` loads and exports environment variables:
+
+```javascript config.js
+const dotenv = require("dotenv");
+dotenv.config();
+
+module.exports = {
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  PORT: process.env.PORT,
+  VOICE: "shimmer",
+  SYSTEM_MESSAGE: "You are a cheerful phone assistant...",
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
+  TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER,
+};
+```
+
+### Additional Configuration Options
+
+These are hardcoded in `config.js` but can be customized:
+
+**VOICE**: OpenAI voice model
+- Options: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
+- Default: `shimmer`
+
+**SYSTEM_MESSAGE**: AI assistant instructions
+- Customize the behavior of the voice assistant
+- Default: Cheerful phone assistant for Olive Financial
+
+**LOG_EVENT_TYPES**: WebSocket events to log
+- Controls which OpenAI Realtime API events are logged
+- See [Backend Setup](/setup/backend-setup#logging-configuration) for full list
+
+## Security Best Practices
+
+<Warning>
+Never commit `.env` files to version control. Add them to `.gitignore`.
+</Warning>
+
+### .gitignore Setup
+
+Ensure your `.gitignore` includes:
+
+```bash .gitignore
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+```
+
+### Key Security Guidelines
+
+<Steps>
+  <Step title="Keep secrets secret">
+    - Never expose API keys in client-side code
+    - Don't log sensitive environment variables
+    - Use different keys for development and production
+  </Step>
+
+  <Step title="Use appropriate key types">
+    - **Backend**: Use secret keys (never exposed to browser)
+    - **Frontend**: Only use public/anonymous keys with proper Row Level Security (RLS)
+  </Step>
+
+  <Step title="Rotate keys regularly">
+    - Change API keys periodically
+    - Immediately rotate if keys are compromised
+    - Keep backup keys ready for seamless rotation
+  </Step>
+
+  <Step title="Limit key permissions">
+    - Use API keys with minimal required permissions
+    - Enable Supabase RLS policies
+    - Restrict Twilio number capabilities
+  </Step>
+</Steps>
+
+## Environment-Specific Configuration
+
+### Development
+
+```bash
+# Use localhost URLs
+PORT=3000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
+
+# Use test/development API keys
+OPENAI_API_KEY=sk-proj-test-...
+TWILIO_PHONE_NUMBER=+15005550006  # Twilio test number
+```
+
+### Production
+
+```bash
+# Use production URLs
+PORT=8080
+NEXT_PUBLIC_BACKEND_URL=https://api.yourdomain.com
+
+# Use production API keys
+OPENAI_API_KEY=sk-proj-prod-...
+TWILIO_PHONE_NUMBER=+1234567890  # Real Twilio number
+```
+
+## Supabase Setup
+
+Highway uses Supabase for storing call logs:
+
+<Steps>
+  <Step title="Create Supabase project">
+    1. Go to [Supabase Dashboard](https://app.supabase.com/)
+    2. Click "New Project"
+    3. Choose organization and name your project
+    4. Save your database password securely
+  </Step>
+
+  <Step title="Get API credentials">
+    1. Go to Project Settings → API
+    2. Copy the Project URL
+    3. Copy the `anon` `public` key
+    4. Add both to your `.env.local` file
+  </Step>
+
+  <Step title="Create calls table">
+    Run this SQL in the Supabase SQL Editor:
+    
+    ```sql
+    CREATE TABLE calls (
+      id BIGSERIAL PRIMARY KEY,
+      verification INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    
+    -- Enable Row Level Security
+    ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
+    
+    -- Create policy for anonymous access (adjust as needed)
+    CREATE POLICY "Enable read access for all users" ON calls
+      FOR SELECT USING (true);
+    
+    CREATE POLICY "Enable insert access for all users" ON calls
+      FOR INSERT WITH CHECK (true);
+    ```
+  </Step>
+
+  <Step title="Configure RLS policies">
+    Adjust the policies above based on your security requirements.
+    
+    For production, consider adding authentication and restricting access.
+  </Step>
+</Steps>
+
+<Note>
+The example Supabase credentials in the source code are for demonstration only. Always use your own Supabase project.
+</Note>
+
+## Verification
+
+Verify your environment variables are loaded correctly:
+
+### Backend Verification
+
+```bash
+cd highway-backend
+node -e "require('dotenv').config(); console.log('PORT:', process.env.PORT);"
+```
+
+### Frontend Verification
+
+```bash
+cd highway-frontend
+echo $NEXT_PUBLIC_SUPABASE_URL
+```
+
+### Runtime Verification
+
+Add temporary logging to check variables are loaded:
+
+```javascript
+// Backend (index.js)
+console.log('Loaded PORT:', PORT);
+
+// Frontend (browser console)
+console.log('Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+```
+
+<Warning>
+Remove debug logging before deploying to production to avoid exposing sensitive data.
+</Warning>
+
+## Troubleshooting
+
+**Variables not loading?**
+- Check file name is exactly `.env` (backend) or `.env.local` (frontend)
+- Ensure file is in the correct directory
+- Restart your dev server after changing `.env` files
+- Verify no typos in variable names
+
+**Supabase connection issues?**
+- Verify URL and key are correct
+- Check Supabase project is not paused
+- Ensure RLS policies allow your operations
+- Test connection in Supabase SQL editor
+
+**Twilio errors?**
+- Verify Account SID and Auth Token are correct
+- Ensure phone number is in E.164 format
+- Check Twilio number is capable of making voice calls
+- Verify you have sufficient Twilio credits
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Setup" icon="server" href="/setup/backend-setup">
+    Complete backend server setup
+  </Card>
+  <Card title="Deployment" icon="rocket" href="/setup/deployment">
+    Deploy to production with environment variables
+  </Card>
+</CardGroup>

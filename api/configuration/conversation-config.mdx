@@ -1,0 +1,251 @@
+---
+title: 'Conversation Configuration'
+description: 'Configure OpenAI Realtime API session settings for Highway voice calls'
+---
+
+## Overview
+
+The `sessionConfig` object defines the conversation behavior for Highway's OpenAI Realtime API integration. This configuration controls voice detection, audio formats, model behavior, and available functions.
+
+## Session Configuration
+
+The session configuration is defined in `conversationConfig.js` and sent to OpenAI when establishing a WebSocket connection.
+
+```javascript conversationConfig.js
+const sessionConfig = {
+  turn_detection: {
+    type: "server_vad",
+    threshold: 0.95,
+  },
+  input_audio_format: "g711_ulaw",
+  output_audio_format: "g711_ulaw",
+  voice: VOICE,
+  instructions: SYSTEM_MESSAGE,
+  modalities: ["text", "audio"],
+  temperature: 0.6,
+  tools: [...]
+};
+```
+
+## Configuration Parameters
+
+<ParamField path="turn_detection" type="object" required>
+  Voice Activity Detection (VAD) settings for determining when a user has finished speaking.
+  
+  <Expandable title="properties">
+    <ParamField path="type" type="string" default="server_vad">
+      VAD type. Set to `"server_vad"` for server-side voice activity detection.
+    </ParamField>
+    
+    <ParamField path="threshold" type="number" default="0.95">
+      Sensitivity threshold for detecting end of speech (0.0 to 1.0). Higher values (like 0.95) require more certainty before determining the user has stopped speaking, reducing false interruptions.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="input_audio_format" type="string" default="g711_ulaw">
+  Audio codec for incoming audio from Twilio. Must be `"g711_ulaw"` for Twilio compatibility.
+</ParamField>
+
+<ParamField path="output_audio_format" type="string" default="g711_ulaw">
+  Audio codec for outgoing audio to Twilio. Must be `"g711_ulaw"` for Twilio compatibility.
+</ParamField>
+
+<ParamField path="voice" type="string" default="shimmer">
+  OpenAI voice to use for text-to-speech. Default is `"shimmer"`. See [OpenAI's voice options](https://platform.openai.com/docs/guides/text-to-speech/voice-options) for alternatives: alloy, echo, fable, onyx, nova, shimmer.
+</ParamField>
+
+<ParamField path="instructions" type="string" required>
+  System message that defines the AI assistant's behavior. See [System Prompts](/api/configuration/system-prompts) for details.
+</ParamField>
+
+<ParamField path="modalities" type="array" default='["text", "audio"]'>
+  Communication modes enabled for the conversation. Include both `"text"` and `"audio"` for voice calls.
+</ParamField>
+
+<ParamField path="temperature" type="number" default="0.6">
+  Controls randomness in responses (0.0 to 1.0). Lower values (like 0.6) produce more consistent, focused responses - ideal for verification workflows.
+</ParamField>
+
+<ParamField path="tools" type="array">
+  Function definitions available to the AI during the call. See [Available Tools](#available-tools) below.
+</ParamField>
+
+## Available Tools
+
+Highway provides two built-in functions that the AI can call during conversations:
+
+<Accordion title="hang_up_call">
+  Ends the phone call gracefully.
+  
+  **Description:**  
+  This function terminates the active phone call. The AI is instructed to only hang up if:
+  - The customer explicitly asks to hang up
+  - All system prompts are finished
+  - The AI has said "thank you" before hanging up
+  
+  **Parameters:**
+  
+  <ParamField path="hangup" type="boolean" required>
+    Must be `true` to hang up the call.
+  </ParamField>
+  
+  **Implementation:**
+  
+  ```javascript
+  {
+    type: "function",
+    name: "hang_up_call",
+    description: "This function ends and hangs up the phone call. ONLY HANG UP IF THE CUSTOMER EXPLICITLY ASKS TO HANG UP OR ALL THE SYSTEM PROMPTS ARE FINISHED. SAY THANK YOU BEFORE HANGING UP",
+    parameters: {
+      type: "object",
+      properties: {
+        hangup: { type: "boolean" },
+      },
+      required: ["hangup"],
+    },
+  }
+  ```
+  
+  **Behavior:**  
+  When this function is called (websocket.js:95-99), Highway closes the WebSocket connection, ending the call.
+</Accordion>
+
+<Accordion title="call_reflection_data">
+  Sends call metadata and status information to the backend after the call completes.
+  
+  **Description:**  
+  This function records the outcome of the call. The AI is explicitly instructed NOT to run this function unless told to by the system.
+  
+  **Parameters:**
+  
+  <ParamField path="status" type="string" required>
+    Call outcome status. Must be one of:
+    - `"user_hung_up"` - Customer ended the call
+    - `"system_error"` - Technical error occurred
+    - `"successful_call"` - Call completed successfully
+    - `"unsuccessful_call"` - Call did not achieve its goal
+    - `"in_progress"` - Call is still active
+  </ParamField>
+  
+  **Implementation:**
+  
+  ```javascript
+  {
+    type: "function",
+    name: "call_reflection_data",
+    description: "ONLY RUN THIS WHEN CALLED TO. DO NOT RUN THIS FUNCTION UNLESS YOU ARE EXPLITCLY TOLD TO. function is used to send reflection data to the backend after the call is finished.",
+    parameters: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: [
+            "user_hung_up",
+            "system_error",
+            "successful_call",
+            "unsuccessful_call",
+            "in_progress",
+          ],
+        },
+      },
+      required: ["status"],
+    },
+  }
+  ```
+  
+  **Behavior:**  
+  When called (websocket.js:86-92), the function updates the call record in Supabase with the provided status.
+</Accordion>
+
+## Customizing Conversation Behavior
+
+### Adjusting Voice Detection Sensitivity
+
+If users are being cut off mid-sentence, lower the `threshold`:
+
+```javascript
+turn_detection: {
+  type: "server_vad",
+  threshold: 0.8, // More lenient
+}
+```
+
+If there are long pauses before the AI responds, increase it:
+
+```javascript
+turn_detection: {
+  type: "server_vad",
+  threshold: 0.98, // More strict
+}
+```
+
+### Changing the Voice
+
+Modify the `VOICE` constant in `config.js`:
+
+```javascript config.js
+VOICE: "nova", // Or: alloy, echo, fable, onyx, shimmer
+```
+
+### Adjusting Response Creativity
+
+For more consistent responses:
+
+```javascript
+temperature: 0.3, // Very deterministic
+```
+
+For more varied responses:
+
+```javascript
+temperature: 0.9, // More creative
+```
+
+### Adding Custom Functions
+
+Add new tool definitions to the `tools` array:
+
+```javascript
+tools: [
+  // ... existing tools
+  {
+    type: "function",
+    name: "transfer_call",
+    description: "Transfer the call to a human agent",
+    parameters: {
+      type: "object",
+      properties: {
+        department: { 
+          type: "string",
+          enum: ["support", "sales", "billing"]
+        },
+      },
+      required: ["department"],
+    },
+  },
+]
+```
+
+Then handle the function call in your WebSocket message handler (websocket.js:86-92).
+
+## Usage in Code
+
+The session configuration is sent to OpenAI when the WebSocket connection opens:
+
+```javascript websocket.js
+const sendSessionUpdate = () => {
+  const sessionUpdate = {
+    type: "session.update",
+    session: sessionConfig,
+  };
+  
+  openAiWs.send(JSON.stringify(sessionUpdate));
+};
+```
+
+## Related
+
+- [System Prompts](/api/configuration/system-prompts) - Configure AI behavior and instructions
+- [WebSocket Media Stream](/api/websocket/media-stream) - WebSocket implementation details
+- [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) - Official OpenAI documentation

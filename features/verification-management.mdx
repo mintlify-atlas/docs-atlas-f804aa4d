@@ -1,0 +1,294 @@
+---
+title: 'Verification Management'
+description: 'Create and manage phone verifications in Highway'
+icon: 'clipboard-check'
+---
+
+## Overview
+
+Verification management is the core workflow of Highway. A verification represents a customer identity check that needs to be performed via an AI-powered phone call. Each verification contains customer information, contact details, and the data points that need to be verified.
+
+## Verification Workflow
+
+The typical verification workflow follows these steps:
+
+1. **Create Verification** - Add customer details and verification data
+2. **Initiate Call** - Trigger an automated phone call to the customer
+3. **AI Verification** - The AI agent asks questions to verify identity
+4. **Track Status** - Monitor call progress and results
+5. **Review Outcome** - Check if verification was successful
+
+## Creating a Verification
+
+Verifications are created through the Highway dashboard. Each verification requires the following information:
+
+### Required Fields
+
+<AccordionGroup>
+  <Accordion title="Name" icon="user">
+    The customer's full name. This identifies who is being verified and is displayed in the dashboard.
+    
+    **Example:** `John Smith`
+  </Accordion>
+
+  <Accordion title="Phone Number" icon="phone">
+    A 10-digit US phone number where the customer can be reached.
+    
+    **Format:** Must be exactly 10 digits (no dashes or spaces)
+    
+    **Example:** `5551234567`
+    
+    <Note>
+      Phone numbers are automatically formatted with a +1 country code when initiating calls.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Background" icon="file-lines">
+    Context about why the verification is being performed. This helps the AI agent explain the purpose of the call to the customer.
+    
+    **Example:** `Customer signed up for a loan`
+    
+    **Example:** `New account registration requiring identity verification`
+  </Accordion>
+
+  <Accordion title="Verification Data (JSON)" icon="brackets-curly">
+    A JSON object containing the specific data points that need to be verified with the customer. The AI agent will ask questions about this information.
+    
+    **Example:**
+    ```json
+    {
+      "date of birth": "1990-01-01",
+      "address": "123 Main St, Anytown, USA",
+      "last_4_ssn": "1234"
+    }
+    ```
+    
+    <Warning>
+      The verification data must be valid JSON. The dashboard will validate this automatically.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+### Creating via Dashboard
+
+From the main dashboard at `highway-frontend/src/app/page.tsx:111-129`:
+
+1. Click the **"Add verification"** button
+2. Fill in all required fields in the modal form
+3. Enter verification data as valid JSON
+4. Click **"Add verification"** to save
+
+The verification will be immediately added to the Pending Verifications table.
+
+<CodeGroup>
+```typescript Dashboard Code
+const handleSubmit = async (values: typeof form.values) => {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("verifications").insert({
+    name: values.name,
+    phone: values.phoneNumber,
+    data: JSON.parse(values.userData),
+    type: values.type,
+  });
+
+  if (error) {
+    console.error("Error adding verification:", error);
+  } else {
+    console.log("Verification added successfully:", data);
+    fetchCustomers(); // Refresh the customer list
+    closeAddUserModal();
+    form.reset();
+  }
+};
+```
+
+```json Example Verification
+{
+  "name": "Jane Doe",
+  "phone": "5559876543",
+  "type": "Customer applied for credit card",
+  "data": {
+    "date_of_birth": "1985-06-15",
+    "mother_maiden_name": "Johnson",
+    "address": "456 Oak Avenue, Springfield, IL 62701"
+  }
+}
+```
+</CodeGroup>
+
+## Verification Data Structure
+
+Each verification record in the `verifications` table contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Integer | Auto-generated unique identifier |
+| `name` | String | Customer's full name |
+| `phone` | String | 10-digit phone number |
+| `type` | String | Background context for the verification |
+| `data` | JSON | Key-value pairs of information to verify |
+| `created_at` | Timestamp | When the verification was created |
+
+### JSON Data Schema
+
+The `data` field is flexible and can contain any JSON structure. Common fields include:
+
+<Tabs>
+  <Tab title="Personal Information">
+    ```json
+    {
+      "date_of_birth": "1990-01-01",
+      "social_security_last_4": "1234",
+      "mother_maiden_name": "Smith"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Address Verification">
+    ```json
+    {
+      "current_address": "123 Main St, Anytown, USA",
+      "previous_address": "456 Oak Ave, Other City, USA",
+      "years_at_address": "5"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Financial Data">
+    ```json
+    {
+      "employer": "Acme Corporation",
+      "annual_income": "75000",
+      "account_number_last_4": "9876"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Custom Questions">
+    ```json
+    {
+      "favorite_color": "blue",
+      "pet_name": "Fluffy",
+      "car_make_2005": "Honda"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Managing Verifications in the Dashboard
+
+The main dashboard displays all verifications in a table format (`highway-frontend/src/app/page.tsx:311-359`):
+
+### Table Columns
+
+- **Name** - Customer name with optional status badge
+- **Phone Number** - Contact number
+- **Background** - Verification context
+- **Action** - Buttons to view data or initiate call
+
+### Available Actions
+
+<CardGroup cols={2}>
+  <Card title="View Data" icon="eye">
+    Click the **"Data"** button to preview the verification data that will be asked about during the call.
+    
+    This opens a modal showing the formatted JSON data that the AI agent will reference.
+  </Card>
+  
+  <Card title="Initiate Call" icon="phone">
+    Click the **"Initiate call"** button to start an AI-powered verification call.
+    
+    The button shows a loading state while the call is being set up.
+  </Card>
+</CardGroup>
+
+### Initiating Calls
+
+When you click "Initiate call" (`highway-frontend/src/app/page.tsx:77-85`):
+
+```typescript
+const handleCall = (customerId: number, phoneNumber: string) => {
+  setCallInProgress((prev) => ({ ...prev, [customerId]: true }));
+  callCustomer(
+    `+1${phoneNumber.replace(/[^\d]/g, "")}`,
+    customerId.toString()
+  ).finally(() => {
+    setCallInProgress((prev) => ({ ...prev, [customerId]: false }));
+  });
+};
+```
+
+1. Phone number is formatted with +1 prefix
+2. Non-numeric characters are stripped
+3. Call is initiated via the backend API
+4. Button shows loading state during setup
+
+## Status Tracking
+
+Verification status is tracked through associated call records. Each verification can have multiple call attempts.
+
+### Call Statuses
+
+| Status | Meaning |
+|--------|----------|
+| `in_progress` | Call is currently active |
+| `successful_call` | Identity was verified successfully |
+| `unsuccessful_call` | Identity could not be verified |
+| `user_hung_up` | Customer ended the call early |
+| `system_error` | Technical error occurred |
+
+<Note>
+  View detailed call history and outcomes in the [Call Monitoring](/features/call-monitoring) dashboard.
+</Note>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Data Selection" icon="check">
+    - Choose 2-3 verification points that are easy to verify but hard to guess
+    - Avoid overly complex questions that might confuse customers
+    - Use clear, unambiguous field names in your JSON data
+    - Test verification questions with sample data first
+  </Accordion>
+  
+  <Accordion title="Background Context" icon="circle-info">
+    - Be specific about why verification is needed
+    - Keep background information concise (1-2 sentences)
+    - Include the business context (loan, account, service, etc.)
+    - This helps the AI agent explain the call purpose naturally
+  </Accordion>
+  
+  <Accordion title="Phone Numbers" icon="phone">
+    - Verify phone numbers are accurate before creating verifications
+    - Ensure numbers can receive calls (not VoIP restrictions)
+    - Consider time zones when initiating calls
+    - Keep track of unsuccessful call attempts
+  </Accordion>
+  
+  <Accordion title="Privacy & Security" icon="shield">
+    - Never include full SSN or highly sensitive data
+    - Use partial identifiers (last 4 digits) when possible
+    - Follow your organization's data handling policies
+    - Review verification data before saving
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="AI Phone Calls" icon="robot" href="/features/ai-phone-calls">
+    Learn how the AI agent conducts verification calls
+  </Card>
+  
+  <Card title="Call Monitoring" icon="chart-line" href="/features/call-monitoring">
+    Track call status and view verification results
+  </Card>
+  
+  <Card title="Supabase Integration" icon="database" href="/features/supabase-integration">
+    Understand the database schema and data flow
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/call-customer">
+    Integrate verification calls programmatically
+  </Card>
+</CardGroup>

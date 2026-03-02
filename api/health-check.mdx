@@ -1,0 +1,103 @@
+---
+title: GET /
+description: Health check endpoint to verify the API is running
+---
+
+## Endpoint
+
+```
+GET /
+```
+
+Simple health check endpoint that returns the current status of the Highway API server.
+
+## Request
+
+No parameters required.
+
+## Response
+
+<ResponseField name="message" type="string">
+  Status message indicating the server is running
+</ResponseField>
+
+### Success Response
+
+**Status Code:** 200 OK
+
+```json
+{
+  "message": "Running"
+}
+```
+
+## Usage
+
+Use this endpoint to:
+- Verify the API server is operational
+- Monitor uptime in health check scripts
+- Confirm deployment success
+- Test API connectivity
+
+## Code Examples
+
+<CodeGroup>
+
+```bash cURL
+curl https://your-server.com/
+```
+
+```javascript JavaScript
+const response = await fetch('https://your-server.com/');
+const data = await response.json();
+console.log(data.message); // "Running"
+```
+
+```python Python
+import requests
+
+response = requests.get('https://your-server.com/')
+data = response.json()
+print(data['message'])  # "Running"
+```
+
+```typescript TypeScript
+interface HealthResponse {
+  message: string;
+}
+
+const checkHealth = async (): Promise<HealthResponse> => {
+  const response = await fetch('https://your-server.com/');
+  return response.json();
+};
+
+// Usage
+const health = await checkHealth();
+console.log(health.message); // "Running"
+```
+
+</CodeGroup>
+
+## Monitoring Example
+
+Use this endpoint in monitoring scripts:
+
+```bash
+#!/bin/bash
+# Health check script
+
+RESPONSE=$(curl -s https://your-server.com/)
+STATUS=$(echo $RESPONSE | jq -r '.message')
+
+if [ "$STATUS" = "Running" ]; then
+  echo "✓ API is healthy"
+  exit 0
+else
+  echo "✗ API is down"
+  exit 1
+fi
+```
+
+<Note>
+This endpoint is implemented at `/home/daytona/workspace/source/highway-backend/routes.js:23` and requires no authentication.
+</Note>

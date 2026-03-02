@@ -1,80 +1,378 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get Highway running and make your first verification call
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will help you set up Highway locally and create your first automated verification call in minutes.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, ensure you have the following:
+
+<Steps>
+  <Step title="Node.js and npm">
+    Install Node.js (version 16 or higher) and npm. Verify installation:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    node --version
+    npm --version
+    ```
+  </Step>
+  
+  <Step title="Twilio Account">
+    Sign up for a [Twilio account](https://www.twilio.com/try-twilio) and obtain:
+    - Account SID
+    - Auth Token
+    - Twilio Phone Number (with voice capabilities)
+  </Step>
+  
+  <Step title="OpenAI API Key">
+    Get your OpenAI API key from the [OpenAI Platform](https://platform.openai.com/api-keys).
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    <Note>
+      You'll need access to the GPT-4o Realtime API. Ensure your account has the necessary permissions.
+    </Note>
+  </Step>
+  
+  <Step title="Supabase Project">
+    Create a [Supabase project](https://supabase.com) and set up the required tables:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    **verifications table:**
+    ```sql
+    create table verifications (
+      id bigserial primary key,
+      name text not null,
+      phone text not null,
+      data jsonb,
+      type text,
+      created_at timestamp with time zone default now()
+    );
+    ```
+    
+    **calls table:**
+    ```sql
+    create table calls (
+      id bigserial primary key,
+      verification bigint references verifications(id),
+      status text default 'in_progress',
+      created_at timestamp with time zone default now()
+    );
+    ```
+  </Step>
+</Steps>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Installation
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+<Steps>
+  <Step title="Clone the Repository">
+    Clone the Highway repository to your local machine:
+    
+    ```bash
+    git clone <repository-url>
+    cd highway
+    ```
+  </Step>
+  
+  <Step title="Install Backend Dependencies">
+    Navigate to the backend directory and install dependencies:
+    
+    <CodeGroup>
+      ```bash npm
+      cd highway-backend
+      npm install
+      ```
+      
+      ```bash yarn
+      cd highway-backend
+      yarn install
+      ```
+      
+      ```bash pnpm
+      cd highway-backend
+      pnpm install
+      ```
+    </CodeGroup>
+    
+    The backend uses the following key dependencies:
+    - `express` - Web server framework
+    - `express-ws` - WebSocket support for Express
+    - `twilio` - Twilio SDK for phone calls
+    - `openai` - OpenAI API client
+    - `@supabase/supabase-js` - Supabase client
+  </Step>
+  
+  <Step title="Install Frontend Dependencies">
+    In a new terminal, navigate to the frontend directory and install dependencies:
+    
+    <CodeGroup>
+      ```bash npm
+      cd highway-frontend
+      npm install
+      ```
+      
+      ```bash yarn
+      cd highway-frontend
+      yarn install
+      ```
+      
+      ```bash pnpm
+      cd highway-frontend
+      pnpm install
+      ```
+    </CodeGroup>
+  </Step>
+</Steps>
 
-### Step 3: Go live
+## Configuration
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Steps>
+  <Step title="Configure Backend Environment">
+    Create a `.env` file in the `highway-backend` directory with your credentials:
+    
+    ```bash
+    # OpenAI Configuration
+    OPENAI_API_KEY=your_openai_api_key_here
+    
+    # Twilio Configuration
+    TWILIO_ACCOUNT_SID=your_twilio_account_sid
+    TWILIO_AUTH_TOKEN=your_twilio_auth_token
+    TWILIO_PHONE_NUMBER=your_twilio_phone_number
+    
+    # Server Configuration
+    PORT=3000
+    ```
+    
+    <Warning>
+      Keep your `.env` file secure and never commit it to version control. The file contains sensitive API keys and credentials.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure Supabase Connection">
+    Update the Supabase configuration in your backend and frontend code:
+    
+    **Backend** (`highway-backend/routes.js` and `highway-backend/websocket.js`):
+    ```javascript
+    const supabase = createClient(
+      'YOUR_SUPABASE_URL',
+      'YOUR_SUPABASE_ANON_KEY'
+    );
+    ```
+    
+    **Frontend** (uses environment variables):
+    Create a `.env.local` file in `highway-frontend`:
+    ```bash
+    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+  </Step>
+  
+  <Step title="Configure API Base URL">
+    Update the API base URL in `highway-frontend/src/utils/api.ts` to point to your backend:
+    
+    ```typescript
+    const API_BASE_URL = "http://localhost:3000";
+    ```
+    
+    <Info>
+      For production deployments, you'll need to expose your backend via a public URL (e.g., using ngrok, a cloud provider, or a VPS).
+    </Info>
+  </Step>
+</Steps>
 
-## Next steps
+## Running Highway
 
-Now that you have your docs running, explore these key features:
+<Steps>
+  <Step title="Start the Backend Server">
+    In the `highway-backend` directory, start the Express server:
+    
+    ```bash
+    node index.js
+    ```
+    
+    You should see:
+    ```
+    Listening on port 3000
+    ```
+    
+    The backend server handles:
+    - REST API endpoints for initiating calls
+    - WebSocket connections for real-time audio streaming
+    - Integration with Twilio and OpenAI
+  </Step>
+  
+  <Step title="Start the Frontend Development Server">
+    In a new terminal, navigate to `highway-frontend` and start the Next.js development server:
+    
+    <CodeGroup>
+      ```bash npm
+      npm run dev
+      ```
+      
+      ```bash yarn
+      yarn dev
+      ```
+      
+      ```bash pnpm
+      pnpm dev
+      ```
+    </CodeGroup>
+    
+    The frontend will be available at `http://localhost:3001` (or the port shown in the terminal).
+  </Step>
+  
+  <Step title="Expose Backend with ngrok (Optional but Recommended)">
+    For Twilio to communicate with your local backend, expose it using ngrok:
+    
+    ```bash
+    ngrok http 3000
+    ```
+    
+    Update the API_BASE_URL in your frontend code with the ngrok URL:
+    ```typescript
+    const API_BASE_URL = "https://your-ngrok-url.ngrok-free.app";
+    ```
+  </Step>
+</Steps>
+
+## Create Your First Verification
+
+<Steps>
+  <Step title="Access the Dashboard">
+    Open your browser and navigate to `http://localhost:3001`. You'll see the Highway dashboard with the "Pending Verifications" table.
+  </Step>
+  
+  <Step title="Add a Verification">
+    Click the "Add verification" button and fill in the form:
+    
+    - **Name**: Customer's name (e.g., "John Doe")
+    - **Phone Number**: 10-digit phone number (e.g., "5551234567")
+    - **Background**: Context for the call (e.g., "customer signed up for a loan")
+    - **Verification Data**: JSON object with data to verify
+    
+    Example verification data:
+    ```json
+    {
+      "date of birth": "1990-01-01",
+      "address": "123 Main St, Anytown, USA",
+      "last four of SSN": "1234"
+    }
+    ```
+    
+    Click "Add verification" to create the record.
+  </Step>
+  
+  <Step title="Initiate the Call">
+    In the verifications table, find your newly created verification and click the "Initiate call" button.
+    
+    The system will:
+    1. Create a call record in the database
+    2. Initiate a Twilio call to the specified phone number
+    3. Establish a WebSocket connection for audio streaming
+    4. Connect to OpenAI's Realtime API
+    5. Begin the AI-powered verification conversation
+  </Step>
+  
+  <Step title="Answer the Call">
+    When the phone rings, answer it. You'll hear the AI agent:
+    
+    1. Introduce itself as an agent from Olive Financial
+    2. Explain the purpose of the call
+    3. Ask verification questions based on your data
+    4. Conduct a natural conversation
+    5. Thank you and hang up when complete
+    
+    <Info>
+      The AI uses OpenAI's "shimmer" voice and is configured to be cheerful and professional.
+    </Info>
+  </Step>
+  
+  <Step title="View Call Results">
+    Navigate to the "Calls" page (if available) or check your Supabase database to see the call status:
+    
+    - **successful_call**: Identity verified successfully
+    - **unsuccessful_call**: Identity not verified
+    - **user_hung_up**: Customer ended the call early
+    - **system_error**: Technical error occurred
+    - **in_progress**: Call is ongoing
+    
+    The calls are displayed with detailed information including:
+    - Customer name and phone number
+    - Call status with color-coded badges
+    - Timestamp of the call
+    - Verification data that was used
+  </Step>
+</Steps>
+
+## What's Happening Under the Hood?
+
+When you initiate a call, here's the flow:
+
+1. **Frontend** sends a POST request to `/call-customer` with phone number and verification ID
+2. **Backend** creates a call record in Supabase with status "in_progress"
+3. **Twilio** initiates the phone call with TwiML containing a WebSocket stream URL
+4. **WebSocket connection** establishes between Twilio and your backend at `/media-stream/:id/:numid`
+5. **Backend** connects to OpenAI Realtime API and fetches verification data from Supabase
+6. **Audio streaming** begins bidirectionally:
+   - Customer audio → Twilio → Backend WebSocket → OpenAI
+   - OpenAI response → Backend WebSocket → Twilio → Customer
+7. **AI conversation** proceeds based on the session configuration and verification data
+8. **Status updates** occur when the AI calls the `call_reflection_data` function
+9. **Call ends** when the AI calls `hang_up_call` or the customer hangs up
+
+## Next Steps
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture Overview" icon="sitemap" href="/architecture">
+    Learn about Highway's system architecture and component interactions
+  </Card>
+  
+  <Card title="Customize AI Behavior" icon="robot" href="/api/configuration/conversation-config">
+    Customize the AI agent's voice, instructions, and conversation flow
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Explore all available API endpoints and WebSocket events
+  </Card>
+  
+  <Card title="Deployment Guide" icon="cloud" href="/setup/deployment">
+    Deploy Highway to production with cloud providers
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Call not connecting">
+    - Verify your Twilio credentials are correct in `.env`
+    - Ensure your Twilio phone number has voice capabilities
+    - Check that your backend is publicly accessible (use ngrok for local testing)
+    - Verify the WebSocket URL in the TwiML is correct
+  </Accordion>
+  
+  <Accordion title="No AI response during call">
+    - Check that your OpenAI API key is valid and has Realtime API access
+    - Verify the WebSocket connection to OpenAI is established (check logs)
+    - Ensure verification data exists in Supabase for the given ID
+    - Check backend logs for any error messages
+  </Accordion>
+  
+  <Accordion title="Frontend can't reach backend">
+    - Verify the API_BASE_URL in `src/utils/api.ts` is correct
+    - Check CORS configuration in backend `index.js`
+    - Ensure backend server is running on the expected port
+    - Test the backend health endpoint: `GET /`
+  </Accordion>
+  
+  <Accordion title="Supabase connection errors">
+    - Verify your Supabase URL and anon key are correct
+    - Ensure the `verifications` and `calls` tables exist
+    - Check Row Level Security (RLS) policies allow the operations
+    - Verify your Supabase project is active
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Remember to keep your API keys and credentials secure. Never commit `.env` files to version control.
+</Warning>

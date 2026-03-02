@@ -1,0 +1,131 @@
+---
+title: Introduction to Highway
+description: Automated identity verification through AI-powered phone calls
+---
+
+# Welcome to Highway
+
+Highway is an AI-powered phone verification platform that automates identity verification using voice calls. Built on cutting-edge technologies, Highway enables businesses to verify customer identities through natural AI conversations, eliminating manual verification processes.
+
+## What is Highway?
+
+Highway combines OpenAI's Realtime API, Twilio's voice infrastructure, and modern web technologies to create an intelligent phone verification system. The platform initiates automated calls to customers, conducts natural voice conversations to verify identity information, and provides real-time monitoring of verification results.
+
+<CardGroup cols={2}>
+  <Card title="AI Voice Verification" icon="microphone">
+    Leverages OpenAI's GPT-4o Realtime API to conduct natural, intelligent conversations with customers for identity verification
+  </Card>
+  
+  <Card title="Twilio Integration" icon="phone">
+    Seamlessly integrates with Twilio's voice infrastructure to initiate and manage phone calls at scale
+  </Card>
+  
+  <Card title="Real-time Monitoring" icon="chart-line">
+    Track verification calls in real-time with detailed status updates and comprehensive call logs
+  </Card>
+  
+  <Card title="Custom Verification Data" icon="database">
+    Define custom verification questions based on your specific data requirements and use cases
+  </Card>
+  
+  <Card title="WebSocket Audio Streaming" icon="tower-broadcast">
+    Real-time audio streaming between Twilio and OpenAI for seamless voice interactions
+  </Card>
+  
+  <Card title="Supabase Backend" icon="server">
+    Reliable data storage and management with Supabase for verifications and call records
+  </Card>
+  
+  <Card title="Next.js Dashboard" icon="browser">
+    Modern, responsive dashboard built with Next.js and Mantine UI for managing verifications
+  </Card>
+  
+  <Card title="WebSocket Architecture" icon="diagram-project">
+    Bi-directional communication enabling real-time audio processing and status updates
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Automated Identity Verification
+
+Highway automates the entire identity verification process through AI-powered phone calls. Simply provide customer information and verification data, and Highway's AI agent will:
+
+- Call the customer automatically
+- Conduct natural conversation to verify identity
+- Ask targeted questions based on your verification data
+- Update verification status in real-time
+- Provide detailed call logs and results
+
+### Intelligent Conversation Flow
+
+The AI agent is powered by OpenAI's GPT-4o Realtime API, enabling:
+
+- Natural voice conversations with voice activity detection
+- Context-aware questioning based on verification data
+- Professional and friendly interaction tone
+- Automatic call handling and hang-up logic
+
+### Developer-Friendly Architecture
+
+Built with modern technologies for easy integration and customization:
+
+- **Backend**: Express.js with WebSocket support
+- **Frontend**: Next.js 14 with Mantine UI components
+- **Database**: Supabase for data persistence
+- **Voice Infrastructure**: Twilio for call management
+- **AI Engine**: OpenAI Realtime API for voice interactions
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get Highway running locally in minutes and make your first verification call
+  </Card>
+  
+  <Card title="Architecture Overview" icon="sitemap" href="/architecture">
+    Understand Highway's system architecture and how components work together
+  </Card>
+  
+  <Card title="Core Features" icon="star" href="/features/verification-management">
+    Explore Highway's key features and capabilities in detail
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/overview">
+    Complete API documentation for backend endpoints and WebSocket events
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+Highway is perfect for:
+
+- **Financial Services**: Verify customer identity before account activation
+- **E-commerce**: Confirm high-value transactions with phone verification
+- **Healthcare**: Validate patient information for telehealth services
+- **Customer Support**: Authenticate callers before accessing sensitive data
+- **Fraud Prevention**: Add an extra layer of security with voice verification
+
+## How It Works
+
+1. **Create Verification**: Add customer information and verification data through the dashboard
+2. **Initiate Call**: Highway calls the customer using Twilio's voice infrastructure
+3. **AI Conversation**: OpenAI's Realtime API conducts a natural conversation to verify identity
+4. **Real-time Processing**: Audio streams between Twilio and OpenAI via WebSocket
+5. **Status Updates**: Verification status updates automatically based on call results
+6. **Review Results**: Access detailed call logs and verification outcomes in the dashboard
+
+<Info>
+  Highway uses server-side voice activity detection (VAD) to ensure natural conversation flow and proper turn-taking between the AI and the customer.
+</Info>
+
+## Why Highway?
+
+- **Reduce Manual Work**: Automate identity verification calls that would otherwise require human agents
+- **Scale Effortlessly**: Handle multiple verification calls simultaneously
+- **Improve Accuracy**: AI-powered verification reduces human error
+- **Enhance Security**: Add robust identity verification to your workflows
+- **Save Costs**: Reduce operational costs associated with manual verification
+- **24/7 Availability**: Conduct verifications any time, day or night
+
+Ready to get started? Check out our [Quick Start Guide](/quickstart) to begin building with Highway.

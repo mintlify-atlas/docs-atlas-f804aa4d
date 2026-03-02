@@ -1,0 +1,407 @@
+---
+title: 'Supabase Setup'
+description: 'Configure Supabase for data storage and management in Highway'
+---
+
+This guide will help you set up Supabase as the backend database for Highway, storing verification data and call records.
+
+## Prerequisites
+
+- A Supabase account
+- Basic understanding of PostgreSQL
+- Access to create and manage database tables
+
+## Creating a Supabase Project
+
+<Steps>
+  <Step title="Sign up or sign in">
+    Go to [supabase.com](https://supabase.com) and create an account or sign in.
+  </Step>
+  
+  <Step title="Create a new project">
+    Click **New Project** and provide:
+    - **Project name**: Choose a descriptive name (e.g., "highway-production")
+    - **Database password**: Create a strong password (save this securely)
+    - **Region**: Select the closest region to your users
+  </Step>
+  
+  <Step title="Wait for provisioning">
+    Supabase will set up your database. This typically takes 1-2 minutes.
+  </Step>
+</Steps>
+
+## Getting API Keys
+
+Once your project is ready, you'll need two API keys:
+
+<Steps>
+  <Step title="Navigate to Project Settings">
+    Click on the **Settings** icon in the left sidebar, then select **API**.
+  </Step>
+  
+  <Step title="Copy the Project URL">
+    Find your **Project URL** (e.g., `https://xxxxx.supabase.co`). You'll need this for the client configuration.
+  </Step>
+  
+  <Step title="Get the anon key">
+    Copy the **anon (public)** key. This key is safe to use in frontend applications with Row Level Security enabled.
+  </Step>
+  
+  <Step title="Get the service_role key">
+    Copy the **service_role** key. This key bypasses Row Level Security and should only be used server-side.
+  </Step>
+</Steps>
+
+<Warning>
+The `service_role` key has full database access. Never expose it in client-side code or commit it to version control.
+</Warning>
+
+## Environment Configuration
+
+Add your Supabase credentials to `.env`:
+
+```bash
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+```
+
+## Database Tables Setup
+
+Highway requires two main tables: `verifications` and `calls`.
+
+### Verifications Table
+
+Stores customer verification data:
+
+<Steps>
+  <Step title="Open SQL Editor">
+    Navigate to **SQL Editor** in the Supabase dashboard.
+  </Step>
+  
+  <Step title="Create verifications table">
+    Run the following SQL:
+    
+    ```sql
+    CREATE TABLE verifications (
+      id SERIAL PRIMARY KEY,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+      customer_name TEXT,
+      phone_number TEXT,
+      verification_data JSONB,
+      status TEXT DEFAULT 'pending'
+    );
+    ```
+  </Step>
+  
+  <Step title="Add indexes">
+    Optimize query performance:
+    
+    ```sql
+    CREATE INDEX idx_verifications_phone ON verifications(phone_number);
+    CREATE INDEX idx_verifications_status ON verifications(status);
+    ```
+  </Step>
+</Steps>
+
+### Calls Table
+
+Tracks call history and status:
+
+<Steps>
+  <Step title="Create calls table">
+    Run this SQL in the SQL Editor:
+    
+    ```sql
+    CREATE TABLE calls (
+      id SERIAL PRIMARY KEY,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW()),
+      verification INTEGER REFERENCES verifications(id),
+      status TEXT DEFAULT 'in_progress',
+      call_sid TEXT,
+      duration INTEGER,
+      recording_url TEXT,
+      transcription TEXT,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+    );
+    ```
+  </Step>
+  
+  <Step title="Add indexes and constraints">
+    ```sql
+    CREATE INDEX idx_calls_verification ON calls(verification);
+    CREATE INDEX idx_calls_status ON calls(status);
+    CREATE INDEX idx_calls_created ON calls(created_at DESC);
+    ```
+  </Step>
+</Steps>
+
+## Table Schemas and Relationships
+
+### Verifications Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key, auto-incrementing |
+| `created_at` | TIMESTAMP | Record creation timestamp |
+| `customer_name` | TEXT | Customer's name |
+| `phone_number` | TEXT | Customer's phone number |
+| `verification_data` | JSONB | Flexible data storage for verification info |
+| `status` | TEXT | Verification status (pending, completed, failed) |
+
+### Calls Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key, auto-incrementing |
+| `created_at` | TIMESTAMP | Call creation timestamp |
+| `verification` | INTEGER | Foreign key to verifications table |
+| `status` | TEXT | Call status (in_progress, successful_call, etc.) |
+| `call_sid` | TEXT | Twilio call SID |
+| `duration` | INTEGER | Call duration in seconds |
+| `recording_url` | TEXT | URL to call recording |
+| `transcription` | TEXT | Call transcription text |
+| `updated_at` | TIMESTAMP | Last update timestamp |
+
+### Relationship Diagram
+
+```
+verifications (1) ─── (many) calls
+    ↑                      ↑
+    └─ id            verification (FK)
+```
+
+<Info>
+The `verification` column in the `calls` table creates a one-to-many relationship, allowing multiple call attempts per verification.
+</Info>
+
+## Row Level Security (RLS) Policies
+
+Enable RLS to secure your data:
+
+<Steps>
+  <Step title="Enable RLS on tables">
+    ```sql
+    ALTER TABLE verifications ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
+    ```
+  </Step>
+  
+  <Step title="Create policies for verifications">
+    Allow authenticated users to read their own verifications:
+    
+    ```sql
+    CREATE POLICY "Enable read access for authenticated users"
+    ON verifications
+    FOR SELECT
+    TO authenticated
+    USING (true);
+    
+    CREATE POLICY "Enable insert for authenticated users"
+    ON verifications
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+    ```
+  </Step>
+  
+  <Step title="Create policies for calls">
+    ```sql
+    CREATE POLICY "Enable read access for authenticated users"
+    ON calls
+    FOR SELECT
+    TO authenticated
+    USING (true);
+    
+    CREATE POLICY "Enable insert for authenticated users"
+    ON calls
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+    
+    CREATE POLICY "Enable update for authenticated users"
+    ON calls
+    FOR UPDATE
+    TO authenticated
+    USING (true)
+    WITH CHECK (true);
+    ```
+  </Step>
+</Steps>
+
+<Note>
+These are basic RLS policies. In production, you should implement more granular policies based on user roles and ownership.
+</Note>
+
+## Client Configuration
+
+### Backend Configuration
+
+Highway's backend uses the Supabase client for server-side operations:
+
+```javascript routes.js
+const { createClient } = require("@supabase/supabase-js");
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+```
+
+### Using the Client
+
+**Creating a call record:**
+
+```javascript routes.js
+const { data } = await supabase
+  .from("calls")
+  .insert([{ verification: verification, status: "in_progress" }])
+  .select();
+```
+
+**Fetching verification data:**
+
+```javascript websocket.js
+const { data, error } = await supabase
+  .from("verifications")
+  .select("*")
+  .eq("id", streamId);
+```
+
+**Updating call status:**
+
+```javascript websocket.js
+await supabase
+  .from("calls")
+  .update({ status: response.arguments.status })
+  .eq("id", callId);
+```
+
+## Frontend Configuration (Optional)
+
+If you have a frontend dashboard, use the anon key:
+
+```javascript
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
+```
+
+<Info>
+Frontend environment variables should be prefixed with `NEXT_PUBLIC_` (Next.js) or `VITE_` (Vite) to expose them to the client.
+</Info>
+
+## Testing Database Operations
+
+<Steps>
+  <Step title="Install Supabase client">
+    ```bash
+    npm install @supabase/supabase-js
+    ```
+  </Step>
+  
+  <Step title="Test connection">
+    Create a test script:
+    
+    ```javascript
+    const { createClient } = require('@supabase/supabase-js');
+    
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+    
+    async function testConnection() {
+      const { data, error } = await supabase
+        .from('verifications')
+        .select('count');
+      
+      if (error) {
+        console.error('Error:', error);
+      } else {
+        console.log('Connection successful!', data);
+      }
+    }
+    
+    testConnection();
+    ```
+  </Step>
+  
+  <Step title="Run the test">
+    ```bash
+    node test-supabase.js
+    ```
+  </Step>
+</Steps>
+
+## Database Monitoring
+
+<Steps>
+  <Step title="View table data">
+    Navigate to **Table Editor** in Supabase to view and edit data directly.
+  </Step>
+  
+  <Step title="Check logs">
+    Go to **Logs** > **Database** to monitor queries and errors.
+  </Step>
+  
+  <Step title="Monitor performance">
+    Use **Reports** to track database performance and query patterns.
+  </Step>
+</Steps>
+
+## Best Practices
+
+### Security
+
+1. **Use RLS policies**: Always enable Row Level Security
+2. **Separate keys**: Use `anon_key` for frontend, `service_role` for backend only
+3. **Validate inputs**: Sanitize data before inserting into the database
+4. **Rotate keys**: Regularly rotate API keys for security
+
+### Performance
+
+1. **Add indexes**: Index frequently queried columns
+2. **Use select()**: Only fetch columns you need
+3. **Batch operations**: Use bulk inserts when possible
+4. **Monitor queries**: Check slow queries in Supabase logs
+
+### Data Management
+
+1. **Backup regularly**: Enable automated backups in project settings
+2. **Clean old data**: Archive or delete old call records
+3. **Use JSONB wisely**: Store flexible data in `verification_data`
+4. **Add timestamps**: Track created_at and updated_at for all records
+
+## Troubleshooting
+
+### Common Issues
+
+**Connection errors**
+- Verify your Supabase URL and API keys are correct
+- Check that your project is not paused (free tier limitation)
+- Ensure network allows connections to Supabase
+
+**RLS blocking queries**
+- Check RLS policies are configured correctly
+- Verify user authentication status
+- Use service_role key for server-side operations that need full access
+
+**Insert/Update failures**
+- Validate data types match table schema
+- Check foreign key constraints
+- Review RLS policies for INSERT/UPDATE permissions
+
+**Slow queries**
+- Add indexes on frequently queried columns
+- Limit result sets with `.limit()`
+- Use `.select('column1, column2')` instead of `.select('*')`
+
+## Next Steps
+
+- [Configure Twilio](/integration/twilio-setup) for phone integration
+- [Set up OpenAI](/integration/openai-setup) for AI processing
+- Learn about [Environment Variables](/setup/environment-variables)

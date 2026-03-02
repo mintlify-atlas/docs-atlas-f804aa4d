@@ -1,0 +1,473 @@
+---
+title: 'AI-Powered Phone Calls'
+description: 'How Highway uses AI to conduct automated verification calls'
+icon: 'robot'
+---
+
+## Overview
+
+Highway uses OpenAI's Realtime API to power intelligent, natural phone conversations for identity verification. The AI agent conducts real-time voice calls, asks verification questions, and determines whether the customer's identity can be confirmed.
+
+## How AI Verification Calls Work
+
+<Steps>
+  <Step title="Call Initiated">
+    When you click "Initiate call" in the dashboard, Highway uses Twilio to place a phone call to the customer and establishes a WebSocket connection to stream audio.
+  </Step>
+  
+  <Step title="AI Connection">
+    The audio stream connects to OpenAI's Realtime API (`gpt-4o-realtime-preview-2024-10-01`) via WebSocket, enabling real-time conversation.
+  </Step>
+  
+  <Step title="Context Loading">
+    The system loads verification data from Supabase and injects it into the AI's context as a system prompt.
+  </Step>
+  
+  <Step title="Conversation Flow">
+    The AI agent introduces itself, explains the call purpose, and asks 2 verification questions one at a time based on the verification data.
+  </Step>
+  
+  <Step title="Verification Decision">
+    After the conversation, the AI determines if the identity was successfully verified and updates the call status.
+  </Step>
+  
+  <Step title="Call Completion">
+    The call ends gracefully with a thank you message, and the final status is recorded in the database.
+  </Step>
+</Steps>
+
+## OpenAI Realtime API Integration
+
+Highway integrates with OpenAI's Realtime API to enable natural voice conversations. The connection is established via WebSocket at `highway-backend/websocket.js:18-26`:
+
+```javascript WebSocket Connection
+const openAiWs = new WebSocket(
+  "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
+  {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "OpenAI-Beta": "realtime=v1",
+    },
+  }
+);
+```
+
+### Session Configuration
+
+The AI session is configured with specific parameters for optimal phone call performance (`highway-backend/conversationConfig.js:3-51`):
+
+<Tabs>
+  <Tab title="Audio Settings">
+    ```javascript
+    {
+      input_audio_format: "g711_ulaw",
+      output_audio_format: "g711_ulaw",
+      voice: "shimmer"
+    }
+    ```
+    
+    - **Audio Format:** `g711_ulaw` - Standard telephony codec compatible with Twilio
+    - **Voice:** `shimmer` - OpenAI's natural-sounding female voice
+  </Tab>
+  
+  <Tab title="Detection Settings">
+    ```javascript
+    {
+      turn_detection: {
+        type: "server_vad",
+        threshold: 0.95
+      }
+    }
+    ```
+    
+    - **VAD (Voice Activity Detection):** Server-side detection determines when the customer stops speaking
+    - **Threshold:** 0.95 - High confidence threshold to avoid interrupting the customer
+  </Tab>
+  
+  <Tab title="Model Settings">
+    ```javascript
+    {
+      modalities: ["text", "audio"],
+      temperature: 0.6
+    }
+    ```
+    
+    - **Modalities:** Both text and audio for flexible processing
+    - **Temperature:** 0.6 - Balanced between consistency and natural variation
+  </Tab>
+</Tabs>
+
+## Conversation Flow
+
+The AI agent follows a structured conversation flow designed for effective identity verification:
+
+### 1. Introduction Phase
+
+The AI agent is instructed to introduce itself and explain the purpose of the call (`highway-backend/websocket.js:56-60`):
+
+```javascript System Prompt
+const sending_data = `SYSTEM:(Explain to the customer that you are an agent with Olive Financial. Read the background from the identity provider and verify the information provided BUT do not confirm any information, just ask 2 questions one at a time based on the following data: ${JSON.stringify(bigdata)})`;
+```
+
+<Note>
+  The AI uses the **background** field from the verification to explain why the call is happening.
+</Note>
+
+### 2. Question Phase
+
+The AI asks questions based on the verification data:
+
+- **Two questions total** - Keeps the call focused and efficient
+- **One at a time** - Allows customer to answer fully before moving on
+- **Based on verification data** - AI selects appropriate questions from the JSON data
+- **No confirmation** - AI doesn't reveal the correct answers, only asks questions
+
+### 3. Completion Phase
+
+After gathering responses, the AI:
+
+1. Thanks the customer for their time
+2. Determines verification outcome (successful or unsuccessful)
+3. Ends the call gracefully
+
+## Voice Configuration
+
+Highway uses OpenAI's **shimmer** voice for all verification calls (`highway-backend/config.js:7`):
+
+```javascript
+VOICE: "shimmer"
+```
+
+### Voice Characteristics
+
+<CardGroup cols={2}>
+  <Card title="Natural & Professional" icon="user-tie">
+    Shimmer provides a warm, professional tone appropriate for business calls and identity verification scenarios.
+  </Card>
+  
+  <Card title="Clear Articulation" icon="volume-high">
+    Excellent clarity for phone calls, ensuring customers can understand questions even on poor connections.
+  </Card>
+  
+  <Card title="Conversational Pace" icon="gauge">
+    Natural speaking rhythm that doesn't feel rushed or robotic.
+  </Card>
+  
+  <Card title="Consistent Quality" icon="check">
+    Reliable voice quality across all calls for a professional brand experience.
+  </Card>
+</CardGroup>
+
+## System Prompts and Instructions
+
+The AI agent receives specific instructions to guide its behavior during calls.
+
+### Base System Message
+
+From `highway-backend/config.js:8-9`:
+
+```javascript
+SYSTEM_MESSAGE:
+  "You are a cheerful phone assistant. You work for Olive Financial and do very specific things that the SYSTEM tells you. The SYSTEM will speak to you in the following format: `SYSTEM:(MESSAGE)`. You only do what is asked of you by SYSTEM and do not ask any additional questions."
+```
+
+<Accordion title="Why This Approach?" icon="circle-question">
+  This system message design:
+  
+  - **Defines scope:** Agent only follows SYSTEM instructions, preventing off-script behavior
+  - **Sets tone:** "Cheerful phone assistant" creates a friendly customer experience
+  - **Establishes authority:** Agent understands it works for Olive Financial
+  - **Prevents hallucination:** "Do not ask additional questions" keeps conversation focused
+  - **Clear format:** `SYSTEM:(MESSAGE)` pattern separates instructions from conversation
+</Accordion>
+
+### Dynamic Verification Instructions
+
+When a call starts, verification-specific instructions are injected (`highway-backend/websocket.js:56-60`):
+
+```javascript
+SYSTEM:(Explain to the customer that you are an agent with Olive Financial. 
+Read the background from the identity provider and verify the information 
+provided BUT do not confirm any information, just ask 2 questions one at a 
+time based on the following data: {...verification data...})
+```
+
+This prompt includes:
+- Company introduction (Olive Financial)
+- Background context (e.g., "customer signed up for a loan")
+- Verification data (JSON object with information to verify)
+- Clear instructions (ask 2 questions, one at a time, don't confirm answers)
+
+## Call Functions
+
+The AI agent has access to two specialized functions for call management:
+
+### hang_up_call Function
+
+From `highway-backend/conversationConfig.js:17-27`:
+
+```javascript
+{
+  type: "function",
+  name: "hang_up_call",
+  description: "This function ends and hangs up the phone call. ONLY HANG UP IF THE CUSTOMER EXPLICITLY ASKS TO HANG UP OR ALL THE SYSTEM PROMPTS ARE FINISHED. SAY THANK YOU BEFORE HANGING UP",
+  parameters: {
+    type: "object",
+    properties: {
+      hangup: { type: "boolean" }
+    },
+    required: ["hangup"]
+  }
+}
+```
+
+<Tabs>
+  <Tab title="Purpose">
+    Allows the AI to gracefully end the call when:
+    - All verification questions have been asked
+    - Customer explicitly requests to end the call
+    - Conversation has reached a natural conclusion
+  </Tab>
+  
+  <Tab title="Behavior">
+    When called, the function:
+    1. AI says "thank you" to the customer
+    2. Closes the WebSocket connection (`highway-backend/websocket.js:94-99`)
+    3. Ends the Twilio call
+  </Tab>
+  
+  <Tab title="Guidelines">
+    - **Always thank** the customer before hanging up
+    - **Don't hang up prematurely** - ensure all questions are asked
+    - **Respect customer requests** - honor explicit hang up requests
+  </Tab>
+</Tabs>
+
+### call_reflection_data Function
+
+From `highway-backend/conversationConfig.js:28-50`:
+
+```javascript
+{
+  type: "function",
+  name: "call_reflection_data",
+  description: "ONLY RUN THIS WHEN CALLED TO. DO NOT RUN THIS FUNCTION UNLESS YOU ARE EXPLICITLY TOLD TO. function is used to send reflection data to the backend after the call is finished.",
+  parameters: {
+    type: "object",
+    properties: {
+      status: {
+        type: "string",
+        enum: [
+          "user_hung_up",
+          "system_error",
+          "successful_call",
+          "unsuccessful_call",
+          "in_progress"
+        ]
+      }
+    },
+    required: ["status"]
+  }
+}
+```
+
+<Tabs>
+  <Tab title="Purpose">
+    Records the outcome of the verification call by updating the call status in the database.
+  </Tab>
+  
+  <Tab title="Status Values">
+    - **successful_call** - Customer correctly verified their identity
+    - **unsuccessful_call** - Customer could not verify their identity
+    - **user_hung_up** - Customer ended the call before completion
+    - **system_error** - Technical issue prevented verification
+    - **in_progress** - Call is still ongoing
+  </Tab>
+  
+  <Tab title="Execution">
+    When the AI calls this function (`highway-backend/websocket.js:86-92`):
+    
+    ```javascript
+    if (response.type === "response.function_call_arguments.done") {
+      console.log("arguments", response.arguments);
+      supabase
+        .from("calls")
+        .update({ status: response.arguments.status })
+        .eq("id", callId);
+    }
+    ```
+    
+    The call record in Supabase is updated with the final status.
+  </Tab>
+  
+  <Tab title="Trigger">
+    This function is automatically triggered when the WebSocket connection closes (`highway-backend/websocket.js:153-165`):
+    
+    ```javascript
+    ws.on("close", () => {
+      openAiWs.send(
+        JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["text"],
+            tool_choice: {
+              type: "function",
+              name: "call_reflection_data",
+            },
+          },
+        })
+      );
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Audio Streaming
+
+Highway implements bidirectional audio streaming between Twilio and OpenAI:
+
+### Customer Audio → OpenAI
+
+From `highway-backend/websocket.js:126-151`:
+
+```javascript
+ws.on("message", (message) => {
+  try {
+    const data = JSON.parse(message);
+    
+    switch (data.event) {
+      case "media":
+        if (openAiWs.readyState === WebSocket.OPEN) {
+          const audioAppend = {
+            type: "input_audio_buffer.append",
+            audio: data.media.payload,
+          };
+          openAiWs.send(JSON.stringify(audioAppend));
+        }
+        break;
+      // ...
+    }
+  } catch (error) {
+    logger.error("Error parsing message:", error);
+  }
+});
+```
+
+### OpenAI → Customer Audio
+
+From `highway-backend/websocket.js:105-114`:
+
+```javascript
+if (response.type === "response.audio.delta" && response.delta) {
+  const audioDelta = {
+    event: "media",
+    streamSid: streamSid,
+    media: {
+      payload: Buffer.from(response.delta, "base64").toString("base64"),
+    },
+  };
+  ws.send(JSON.stringify(audioDelta));
+}
+```
+
+<Note>
+  Audio is streamed in real-time using base64-encoded `g711_ulaw` format, ensuring low latency and natural conversation flow.
+</Note>
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Verification Data Quality" icon="database">
+    - Provide clear, unambiguous verification data points
+    - Use simple field names ("date of birth" vs "dob_mm_dd_yyyy")
+    - Include 3-5 data points so AI has question variety
+    - Test with sample data before production calls
+  </Accordion>
+  
+  <Accordion title="Question Design" icon="circle-question">
+    - Questions should have specific, verifiable answers
+    - Avoid yes/no questions when possible
+    - Use multiple-choice options for complex questions
+    - Ensure questions are appropriate for phone conversation
+  </Accordion>
+  
+  <Accordion title="Background Context" icon="file-lines">
+    - Keep background concise but informative
+    - Explain the business context clearly
+    - Helps AI introduce the call naturally
+    - Sets customer expectations for the conversation
+  </Accordion>
+  
+  <Accordion title="Error Handling" icon="triangle-exclamation">
+    - Monitor system_error statuses in call logs
+    - Check OpenAI API connection health
+    - Verify Twilio phone number configuration
+    - Review WebSocket error logs for debugging
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring & Debugging
+
+### Event Logging
+
+Highway logs specific OpenAI events for monitoring (`highway-backend/config.js:10-18`):
+
+```javascript
+LOG_EVENT_TYPES: [
+  "response.content.done",
+  "rate_limits.updated",
+  "response.done",
+  "input_audio_buffer.committed",
+  "input_audio_buffer.speech_stopped",
+  "input_audio_buffer.speech_started",
+  "session.created",
+]
+```
+
+These events help you understand:
+- When the AI starts and stops listening
+- When responses are generated and completed
+- Rate limit status with OpenAI
+- Session lifecycle events
+
+### Common Issues
+
+<Warning>
+  **WebSocket Connection Failures**
+  
+  If calls fail to connect:
+  - Verify `OPENAI_API_KEY` is set correctly
+  - Check OpenAI account has Realtime API access
+  - Ensure server can establish outbound WebSocket connections
+  - Review firewall rules for WSS connections
+</Warning>
+
+<Warning>
+  **Audio Quality Issues**
+  
+  If audio is choppy or unclear:
+  - Check network bandwidth and latency
+  - Verify VAD threshold (0.95) is appropriate
+  - Monitor Twilio connection quality
+  - Test with different customer phone providers
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Call Monitoring" icon="chart-line" href="/features/call-monitoring">
+    Learn how to track call status and view results
+  </Card>
+  
+  <Card title="Verification Management" icon="clipboard-check" href="/features/verification-management">
+    Create and manage verification records
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/setup/environment-variables">
+    Set up OpenAI and Twilio credentials
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/call-customer">
+    Technical details of the call API
+  </Card>
+</CardGroup>

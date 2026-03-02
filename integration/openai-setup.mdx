@@ -1,0 +1,326 @@
+---
+title: 'OpenAI Setup'
+description: 'Configure OpenAI Realtime API for voice processing in Highway'
+---
+
+This guide covers setting up OpenAI's Realtime API to power Highway's conversational AI for phone verification calls.
+
+## Prerequisites
+
+- An OpenAI account
+- Access to the Realtime API (gpt-4o-realtime models)
+- Payment method configured for API usage
+
+## Getting Your API Key
+
+<Steps>
+  <Step title="Sign in to OpenAI">
+    Go to [platform.openai.com](https://platform.openai.com) and sign in to your account.
+  </Step>
+  
+  <Step title="Navigate to API Keys">
+    Click on your profile icon and select **API Keys** from the dropdown menu.
+  </Step>
+  
+  <Step title="Create a new key">
+    Click **Create new secret key**, give it a descriptive name (e.g., "Highway Production"), and copy the key.
+  </Step>
+  
+  <Step title="Store securely">
+    Save the API key immediately - you won't be able to view it again. Add it to your `.env` file:
+    
+    ```bash
+    OPENAI_API_KEY=sk-proj-...
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+Treat your API key like a password. Never commit it to version control or share it publicly. Rotate keys regularly for security.
+</Warning>
+
+## Realtime API Access
+
+The Realtime API provides low-latency, multimodal conversational experiences.
+
+### Checking Access
+
+<Steps>
+  <Step title="Verify model access">
+    Check your account's model access in the OpenAI dashboard under **Settings** > **Limits**.
+  </Step>
+  
+  <Step title="Request access if needed">
+    If you don't see `gpt-4o-realtime-preview` models, you may need to:
+    - Upgrade to a paid tier
+    - Request access through OpenAI support
+    - Wait for general availability
+  </Step>
+</Steps>
+
+<Info>
+The Realtime API is currently in beta. Pricing and availability may change as it moves to general availability.
+</Info>
+
+## Model Configuration
+
+Highway uses the `gpt-4o-realtime-preview-2024-10-01` model for real-time voice interactions.
+
+### WebSocket Connection
+
+The backend connects to OpenAI's Realtime API via WebSocket:
+
+```javascript websocket.js
+const openAiWs = new WebSocket(
+  "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01",
+  {
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "OpenAI-Beta": "realtime=v1",
+    },
+  }
+);
+```
+
+### Key Parameters
+
+- **Endpoint**: `wss://api.openai.com/v1/realtime`
+- **Model**: `gpt-4o-realtime-preview-2024-10-01`
+- **Header**: `OpenAI-Beta: realtime=v1` (required for beta access)
+
+## Voice Selection
+
+Highway uses the **shimmer** voice for a natural, friendly tone:
+
+```javascript config.js
+VOICE: "shimmer"
+```
+
+### Available Voices
+
+OpenAI's Realtime API supports multiple voice options:
+
+- **alloy**: Neutral and balanced
+- **echo**: Warm and upbeat
+- **shimmer**: Gentle and friendly (Highway default)
+- **nova**: Energetic and engaging
+
+<Note>
+You can change the voice by updating the `VOICE` constant in `config.js`. Test different voices to find the best fit for your use case.
+</Note>
+
+## Audio Format Configuration
+
+Highway uses **g711_ulaw** audio format for compatibility with Twilio's phone network:
+
+```javascript conversationConfig.js
+const sessionConfig = {
+  input_audio_format: "g711_ulaw",
+  output_audio_format: "g711_ulaw",
+  voice: VOICE,
+  // ... other configuration
+};
+```
+
+### Why g711_ulaw?
+
+- **Telephony standard**: Widely used in phone systems
+- **Low bandwidth**: Efficient for real-time streaming
+- **Twilio compatibility**: Native support for Twilio Media Streams
+- **Low latency**: Minimal processing overhead
+
+<Info>
+If you're not using Twilio, you can choose other formats like `pcm16` or `g711_alaw` depending on your use case.
+</Info>
+
+## Session Configuration
+
+The complete session configuration for OpenAI:
+
+```javascript conversationConfig.js
+const sessionConfig = {
+  turn_detection: {
+    type: "server_vad",
+    threshold: 0.95,
+  },
+  input_audio_format: "g711_ulaw",
+  output_audio_format: "g711_ulaw",
+  voice: "shimmer",
+  instructions: SYSTEM_MESSAGE,
+  modalities: ["text", "audio"],
+  temperature: 0.6,
+  tools: [
+    // Function definitions for call control
+  ],
+};
+```
+
+### Configuration Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `turn_detection.type` | `server_vad` | Voice activity detection on server side |
+| `turn_detection.threshold` | `0.95` | High threshold for detecting speech |
+| `temperature` | `0.6` | Moderate randomness for natural responses |
+| `modalities` | `["text", "audio"]` | Enable both text and audio processing |
+
+## Rate Limits and Pricing
+
+### Rate Limits
+
+The Realtime API has different rate limits than standard API endpoints:
+
+- **Requests per minute**: Varies by tier
+- **Tokens per minute**: Varies by tier
+- **Concurrent connections**: Limited based on account
+
+<Steps>
+  <Step title="Check your limits">
+    View current rate limits in the OpenAI dashboard under **Settings** > **Limits**.
+  </Step>
+  
+  <Step title="Monitor usage">
+    Track usage in **Usage** section to avoid hitting limits.
+  </Step>
+  
+  <Step title="Request increases">
+    For higher limits, contact OpenAI support with your use case details.
+  </Step>
+</Steps>
+
+### Pricing Considerations
+
+As of the current beta:
+
+- **Input audio**: Charged per token
+- **Output audio**: Charged per token
+- **Function calls**: Included in token count
+
+<Warning>
+Realtime API pricing is typically higher than standard text models due to the multimodal nature and low latency requirements. Monitor your usage closely, especially during testing.
+</Warning>
+
+### Cost Optimization Tips
+
+1. **Implement timeouts**: Limit call duration to prevent runaway costs
+2. **Use turn detection**: Efficient VAD reduces unnecessary processing
+3. **Monitor logs**: Track token usage per call
+4. **Set up alerts**: Configure billing alerts in OpenAI dashboard
+
+## Testing the Connection
+
+<Steps>
+  <Step title="Verify API key">
+    Test your API key with a simple request:
+    
+    ```bash
+    curl https://api.openai.com/v1/models \
+      -H "Authorization: Bearer $OPENAI_API_KEY"
+    ```
+  </Step>
+  
+  <Step title="Start the backend">
+    Launch your Highway backend with the OpenAI configuration:
+    
+    ```bash
+    npm start
+    ```
+  </Step>
+  
+  <Step title="Check WebSocket connection">
+    Monitor the logs for successful connection:
+    
+    ```
+    Connected to the OpenAI Realtime API
+    ```
+  </Step>
+  
+  <Step title="Make a test call">
+    Initiate a call and verify the AI responds:
+    
+    ```bash
+    curl -X POST http://localhost:3000/call-customer \
+      -H "Content-Type: application/json" \
+      -d '{"to": "+15559876543", "verification": 123}'
+    ```
+  </Step>
+</Steps>
+
+## System Instructions
+
+Customize the AI's behavior by modifying the system message:
+
+```javascript config.js
+SYSTEM_MESSAGE:
+  "You are a cheerful phone assistant. You work for Olive Financial and do very specific thinks that the SYSTEM tells you. The SYSTEM will speak to you in the following format: `SYSTEM:(MESSAGE)`. You only do what is asked of you by SYSTEM and do not ask any additional questions."
+```
+
+<Note>
+Tailor the system instructions to match your brand voice and specific verification requirements. Clear instructions lead to more consistent AI behavior.
+</Note>
+
+## Function Tools
+
+Highway configures custom function tools for call control:
+
+```javascript
+tools: [
+  {
+    type: "function",
+    name: "hang_up_call",
+    description: "Ends the phone call",
+    parameters: {
+      type: "object",
+      properties: {
+        hangup: { type: "boolean" },
+      },
+      required: ["hangup"],
+    },
+  },
+  {
+    type: "function",
+    name: "call_reflection_data",
+    description: "Sends reflection data after call completion",
+    parameters: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["user_hung_up", "system_error", "successful_call", "unsuccessful_call", "in_progress"],
+        },
+      },
+      required: ["status"],
+    },
+  },
+]
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**401 Unauthorized**
+- Verify your API key is correct
+- Check that the key hasn't been revoked
+- Ensure the `Authorization` header is properly formatted
+
+**WebSocket connection fails**
+- Confirm you have Realtime API access
+- Check the `OpenAI-Beta` header is included
+- Verify network allows WebSocket connections
+
+**High latency**
+- Use server-side VAD for faster turn detection
+- Optimize audio format (g711_ulaw is efficient)
+- Check network connection quality
+
+**Audio not processing**
+- Verify audio format matches on both input and output
+- Check that base64 encoding is correct
+- Monitor for dropped WebSocket messages
+
+## Next Steps
+
+- [Set up Supabase](/integration/supabase-setup) for storing call data
+- [Configure Twilio](/integration/twilio-setup) for phone integration
+- Learn about [Conversation Configuration](/api/configuration/conversation-config)
