@@ -1,0 +1,96 @@
+{
+  "projectType": "saas",
+  "projectName": "Highway",
+  "projectDescription": "AI-powered phone verification platform for automated identity verification using voice calls",
+  "theme": "linden",
+  "primaryColor": "#3B82F6",
+  "lightColor": "#60A5FA",
+  "darkColor": "#1E40AF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/verification-management",
+              "features/ai-phone-calls",
+              "features/call-monitoring",
+              "features/supabase-integration"
+            ]
+          },
+          {
+            "group": "Setup & Configuration",
+            "pages": [
+              "setup/backend-setup",
+              "setup/frontend-setup",
+              "setup/environment-variables",
+              "setup/deployment"
+            ]
+          },
+          {
+            "group": "Integration Guides",
+            "pages": [
+              "integration/twilio-setup",
+              "integration/openai-setup",
+              "integration/supabase-setup"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "REST API",
+            "pages": [
+              "api/overview",
+              "api/call-customer",
+              "api/health-check"
+            ]
+          },
+          {
+            "group": "WebSocket",
+            "pages": [
+              "api/websocket/overview",
+              "api/websocket/media-stream"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "api/configuration/conversation-config",
+              "api/configuration/system-prompts"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AI-powered voice verification using OpenAI's Realtime API",
+    "Automated phone calls via Twilio integration",
+    "Real-time call monitoring and status tracking",
+    "Custom verification data management",
+    "WebSocket-based audio streaming",
+    "Supabase backend for data persistence",
+    "Next.js dashboard for verification management"
+  ],
+  "publicApiSurface": [
+    "POST /call-customer - Initiates verification call to customer",
+    "GET / - Health check endpoint",
+    "WS /media-stream/:id/:numid - WebSocket endpoint for real-time audio streaming",
+    "OpenAI Realtime API integration for voice conversation",
+    "Twilio API integration for phone calls",
+    "Supabase client for database operations"
+  ]
+}
